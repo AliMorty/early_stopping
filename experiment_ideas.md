@@ -38,3 +38,32 @@ Key sub-questions:
   bias the max-margin solution to favor some dimensions over others.
 - If E[w_tilde] does converge to w*, it would mean w_tilde is an unbiased
   estimator of the right direction, just a very noisy one.
+
+## Question 3 (Main Goal): Data-Dependent Early Stopping
+
+The paper's early stopping result is theoretical -- the optimal stopping time
+depends on unknown population quantities (w*, the eigenvalue structure, etc.)
+that a practitioner does not have access to. The big question is: can we
+design a data-dependent stopping rule that achieves similar benefits using
+only observable quantities from the training process?
+
+This is the central practical question. A good data-dependent rule would make
+the theoretical guarantees of early stopping actually usable.
+
+Possible directions to explore:
+- Held-out validation: split the n samples, train on one part, monitor
+  population-like loss on the held-out part. Simple but wastes data, which
+  matters when n is already small relative to d.
+- Observable training statistics: can we detect the "turning point" (where
+  the iterate starts drifting from w* toward w_tilde) by monitoring
+  quantities we can compute, such as:
+  - Rate of change of the iterate direction (||w_t/||w_t|| - w_{t-1}/||w_{t-1}||||)
+  - Gradient norm or its rate of decay
+  - Empirical loss curvature or second-order information
+  - Change in the margin distribution over training points
+- Stability-based criteria: run GD on bootstrap resamples or slight
+  perturbations of the data, and stop when the iterates start to diverge
+  across perturbations (indicating the algorithm is starting to fit noise).
+- Connection to Questions 1 and 2: understanding the population GD behavior
+  and the structure of w_tilde may give clues about what observable
+  signatures mark the transition from "learning signal" to "fitting noise."
