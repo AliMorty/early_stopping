@@ -2,6 +2,8 @@
 
 ## Question 1: Population Gradient Descent vs Empirical Gradient Descent
 
+**Status: Not started**
+
 What happens if instead of empirical GD (which uses n=1000 training points to
 compute the gradient), we use the true population gradient? Does the algorithm
 still exhibit the same behavior -- early iterates aligning with w* and then
@@ -21,6 +23,11 @@ Key sub-questions:
 
 ## Question 2: Does the Expected Max-Margin Direction Converge to w*?
 
+**Status: Preliminary results at M=50 (inconclusive)**
+
+See `conjecture 1/conjecture1_wtilde_expectation.ipynb` and
+`conjecture 1/conjecture1_wtilde_expectation_findings.md` for current results.
+
 Given M independent training sets of size n, each yielding a max-margin
 direction w_tilde_m, does the average (1/M) sum_{m=1}^{M} w_tilde_m converge
 in direction to w* as M grows?
@@ -39,7 +46,13 @@ Key sub-questions:
 - If E[w_tilde] does converge to w*, it would mean w_tilde is an unbiased
   estimator of the right direction, just a very noisy one.
 
+Still to do:
+- Run with M=200+ to get a clearer answer
+- Check if the informative subspace cosine converges to 1.0 or plateaus
+
 ## Question 3 (Main Goal): Data-Dependent Early Stopping
+
+**Status: Not started**
 
 The paper's early stopping result is theoretical -- the optimal stopping time
 depends on unknown population quantities (w*, the eigenvalue structure, etc.)
@@ -67,3 +80,17 @@ Possible directions to explore:
 - Connection to Questions 1 and 2: understanding the population GD behavior
   and the structure of w_tilde may give clues about what observable
   signatures mark the transition from "learning signal" to "fitting noise."
+
+## Other experiments to try
+
+**Status: Not started**
+
+- Run GD with larger T (e.g. 100k, 1M) to see more complete convergence
+  to w_tilde. The V3 notebook supports resumable GD, so this is easy.
+- Track population loss alongside empirical loss during GD to see the
+  U-shaped risk curve from Figure 1 of the paper. The population_logistic_loss
+  method already exists in model.py.
+- Vary n/d ratio to see how the "sweet spot" for early stopping changes
+  with the level of overparameterization.
+- Vary the eigenvalue decay rate (e.g. i^{-1} vs i^{-2} vs i^{-3}) to see
+  how the spectral structure affects the dynamics.
