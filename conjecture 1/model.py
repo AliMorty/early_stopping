@@ -16,31 +16,16 @@ class OverparameterizedLogisticRegression:
     (we work directly in the eigenbasis).
     """
 
-    def __init__(self, d=2000, n=1000, k=100, eta=None, seed=42):
-        self.d = d
+    def __init__(self, n, d, k, eigenvalues, w_star, eta, seed=0):
         self.n = n
+        self.d = d
         self.k = k
+        self.eigenvalues = eigenvalues
+        self.w_star = w_star
+        self.eta = eta
         self.seed = seed
 
-        # Eigenvalues: lambda_i = i^{-2}
-        self.eigenvalues = np.array([(i + 1) ** (-2) for i in range(d)])
-
-        # True parameter in eigenbasis: first k components = 1, rest = 0
-        self.w_star = np.zeros(d)
-        self.w_star[:k] = 1.0
-
-        # Step size: eta <= 1 / (C0 * (1 + tr(Sigma) + lambda_1 * ln(1/delta) / n))
         tr_sigma = np.sum(self.eigenvalues)
-        lambda_1 = self.eigenvalues[0]
-        delta = 0.01
-        C0 = 2.0
-        eta_upper = 1.0 / (C0 * (1 + tr_sigma + lambda_1 * np.log(1.0 / delta) / n))
-
-        if eta is None:
-            self.eta = eta_upper
-        else:
-            self.eta = min(eta, eta_upper)
-
         print(f'Parameters: d={d}, n={n}, k={k}')
         print(f'tr(Sigma) = {tr_sigma:.4f}')
         print(f'eta (used) = {self.eta:.6f}')
@@ -52,7 +37,9 @@ class OverparameterizedLogisticRegression:
         self.t_current = 0    # current GD step
         self.w_history = []   # list of (t, w_t)
         self.loss_history = [] # list of (t, loss)
+        self.pop_loss_history = []  # list of (t, population_loss)
         self.w_tilde = None
+        self.stopping_times = []  # all t satisfying the two-sided condition
 
     def generate_data(self):
         """Generate n data points from the logistic model."""
@@ -98,12 +85,17 @@ class OverparameterizedLogisticRegression:
 
     # ---- Gradient descent (resumable) ----
 
-    def run_gd(self, T, log_every=2000):
+    def run_gd(self, T, log_every=2000, track_population_loss=False, pop_samples_per_dim=25):
         """Run (or continue) gradient descent up to step T.
 
         If already at step t_current, only computes steps t_current+1 to T.
         Checkpoints are log-spaced + linearly spaced for plotting.
+
+        Args:
+            track_population_loss: If True, compute population loss at checkpoints.
+            pop_samples_per_dim: MC samples = int(pop_samples_per_dim * d).
         """
+        pop_n_samples = int(pop_samples_per_dim * self.d)
         if T <= self.t_current:
             print(f'Already at t={self.t_current}, nothing to do.')
             return
@@ -126,17 +118,38 @@ class OverparameterizedLogisticRegression:
         ))
         checkpoints_set = log_points | lin_points | {T}
 
+        # Compute k-truncated reference loss for early stopping condition
+        w_star_k = np.zeros(self.d)
+        w_star_k[:self.k] = self.w_star[:self.k]
+        loss_k_truncated = self.empirical_logistic_loss(w_star_k)
+
         print(f'Continuing GD from t={self.t_current} to t={T}...')
+        print(f'  L_hat(w*_0:k) = {loss_k_truncated:.6f}')
         w = self.w_current.copy()
+        prev_loss = self.loss_history[-1][1] if self.loss_history else None
 
         for t in range(self.t_current + 1, T + 1):
-            grad = self.logistic_gradient(w)
+            # Compute margins once, reuse for both gradient and loss
+            margins = self.y * (self.X @ w)
+            sigmoid_neg = -1.0 / (1.0 + np.exp(margins))
+            grad = (self.X.T @ (sigmoid_neg * self.y)) / self.n
+            loss = np.mean(np.logaddexp(0, -margins))  # L(w_{t-1}), before step
+
             w = w - self.eta * grad
 
+            # Check two-sided condition: L(w_{t-1}) <= L(w*_0:k) <= L(w_{t-2})
+            if prev_loss is not None and loss <= loss_k_truncated <= prev_loss:
+                self.stopping_times.append(t - 1)
+
+            prev_loss = loss
+
             if t in checkpoints_set:
-                loss = self.empirical_logistic_loss(w)
                 self.w_history.append((t, w.copy()))
                 self.loss_history.append((t, loss))
+
+                if track_population_loss:
+                    pop_loss = self.population_logistic_loss(w, n_samples=pop_n_samples)
+                    self.pop_loss_history.append((t, pop_loss))
 
                 if t % log_every == 0 or t == T:
                     print(f'  t={t:>8d}: loss={loss:.6f}, ||w||={norm(w):.4f}')
@@ -144,6 +157,8 @@ class OverparameterizedLogisticRegression:
         self.w_current = w.copy()
         self.t_current = T
         print(f'Done. Total checkpoints: {len(self.w_history)}')
+        if self.stopping_times:
+            print(f'Stopping times found: {self.stopping_times}')
 
     # ---- Max-margin direction ----
 
