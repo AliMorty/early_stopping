@@ -110,7 +110,6 @@ function populateSeeds(ratioIdx) {
 function getSelectedRun(ratioIdx) {
   const runs = getRunsForRatio(ratioIdx);
   if (runs.length === 0) return null;
-  // For the current ratio, use the dropdown; for previous, try to match seed
   const idx = Math.min(parseInt(seedSelect.value) || 0, runs.length - 1);
   return runs[idx];
 }
@@ -118,7 +117,6 @@ function getSelectedRun(ratioIdx) {
 function getRun(ratioIdx) {
   const runs = getRunsForRatio(ratioIdx);
   if (runs.length === 0) return null;
-  // Try to match the currently selected seed value
   const selectedRun = getSelectedRun(currentRatioIdx);
   if (selectedRun && ratioIdx !== currentRatioIdx) {
     const match = runs.find(r => r.seed === selectedRun.seed);
@@ -129,11 +127,11 @@ function getRun(ratioIdx) {
 }
 
 function normalize(arr) {
-  if (!arr || arr.length === 0) return [];
+  if (!arr || arr.length === 0) return { normed: [], mn: 0, mx: 0 };
   const mn = Math.min(...arr);
   const mx = Math.max(...arr);
-  if (mx === mn) return arr.map(() => 0.5);
-  return arr.map(v => (v - mn) / (mx - mn));
+  if (mx === mn) return { normed: arr.map(() => 0.5), mn, mx };
+  return { normed: arr.map(v => (v - mn) / (mx - mn)), mn, mx };
 }
 
 function buildTraces(run, checkedMetrics) {
@@ -144,7 +142,7 @@ function buildTraces(run, checkedMetrics) {
     if (!run[m.key]) return;
     const raw = run[m.key];
     const times = run[m.timesKey] || run.times;
-    const normed = normalize(raw);
+    const { normed, mn, mx } = normalize(raw);
     traces.push({
       x: times,
       y: normed,
@@ -155,6 +153,20 @@ function buildTraces(run, checkedMetrics) {
       text: raw.map((v, i) => `${m.label} = ${v.toFixed(4)}`),
       hovertemplate: '%{text}<br>t = %{x}<extra></extra>',
     });
+
+    // Add w* horizontal line when norm is shown
+    if (m.key === 'norm' && run.w_star_norm != null && mx !== mn) {
+      const wStarNormed = (run.w_star_norm - mn) / (mx - mn);
+      traces.push({
+        x: [times[0], times[times.length - 1]],
+        y: [wStarNormed, wStarNormed],
+        type: 'scatter',
+        mode: 'lines',
+        name: '||w*|| = ' + run.w_star_norm.toFixed(2),
+        line: { color: 'gray', width: 1.5, dash: 'dash' },
+        hovertemplate: '||w*|| = ' + run.w_star_norm.toFixed(4) + '<extra></extra>',
+      });
+    }
   });
   // Stopping time vertical lines
   if (run.stopping_times) {
