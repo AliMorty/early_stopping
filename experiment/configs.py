@@ -36,7 +36,7 @@ def create_model(n, d, k, eigenvalues=None, w_star=None, eta=None, seed=0):
     )
 
 
-def run_and_save(model, save_dir="results"):
+def run_and_save(model, save_dir="gd_trajectories"):
     """Run GD is assumed done. Bundles raw data + config into a .pkl file."""
     os.makedirs(save_dir, exist_ok=True)
 
@@ -50,6 +50,8 @@ def run_and_save(model, save_dir="results"):
             "w_star": model.w_star,
             "eta": model.eta,
             "num_iterations": model.t_current,
+            "track_population_loss": getattr(model, "track_population_loss", None),
+            "pop_samples_per_dim": getattr(model, "pop_samples_per_dim", None),
         },
         "w_init": np.zeros(model.d),
         "w_history": model.w_history,

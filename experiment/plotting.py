@@ -43,8 +43,11 @@ def compute_metrics(data):
         "w_star_norm": norm(w_star),
     }
 
+    metrics["angle_w_star"] = np.degrees(np.arccos(np.clip(metrics["cos_wstar"], -1, 1)))
+
     if w_tilde is not None:
         metrics["cos_wtilde"] = np.array(cos_wtilde)
+        metrics["angle_w_tilde"] = np.degrees(np.arccos(np.clip(metrics["cos_wtilde"], -1, 1)))
 
     # Empirical loss history
     loss_history = data.get("loss_history")
@@ -152,12 +155,10 @@ def plot_from_data(data, save_path=None):
     # Angles
     if "angle" in available:
         ax = axes[plot_idx]
-        angle_wstar = np.degrees(np.arccos(np.clip(metrics["cos_wstar"], -1, 1)))
-        ax.semilogx(times, angle_wstar,
+        ax.semilogx(times, metrics["angle_w_star"],
                      label=r'Angle to $w^*/\|w^*\|$', linewidth=2)
-        if "cos_wtilde" in metrics:
-            angle_wtilde = np.degrees(np.arccos(np.clip(metrics["cos_wtilde"], -1, 1)))
-            ax.semilogx(times, angle_wtilde,
+        if "angle_w_tilde" in metrics:
+            ax.semilogx(times, metrics["angle_w_tilde"],
                          label=r'Angle to $\tilde{w}$', linewidth=2)
         add_stopping_lines(ax)
         ax.set_xlabel('GD iteration t (log scale)')

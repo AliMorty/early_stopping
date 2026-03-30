@@ -95,6 +95,8 @@ class OverparameterizedLogisticRegression:
             track_population_loss: If True, compute population loss at checkpoints.
             pop_samples_per_dim: MC samples = int(pop_samples_per_dim * d).
         """
+        self.track_population_loss = track_population_loss
+        self.pop_samples_per_dim = pop_samples_per_dim
         pop_n_samples = int(pop_samples_per_dim * self.d)
         if T <= self.t_current:
             print(f'Already at t={self.t_current}, nothing to do.')
