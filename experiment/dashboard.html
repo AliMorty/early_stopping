@@ -290,11 +290,15 @@ function buildTraces(run, checkedMetrics) {
 }
 
 function getXRange() {
-  const lo = tMin.value ? parseFloat(tMin.value) : null;
-  const hi = tMax.value ? parseFloat(tMax.value) : null;
+  const lo = tMin.value !== '' ? parseFloat(tMin.value) : null;
+  const hi = tMax.value !== '' ? parseFloat(tMax.value) : null;
   if (lo === null && hi === null) return undefined;
   if (xLog) {
-    return [lo ? Math.log10(Math.max(lo, 0.1)) : undefined, hi ? Math.log10(hi) : undefined];
+    const logLo = lo !== null ? Math.log10(Math.max(lo, 1)) : null;
+    const logHi = hi !== null ? Math.log10(hi) : null;
+    if (logLo !== null && logHi !== null) return [logLo, logHi];
+    if (logLo !== null) return [logLo, undefined];
+    return [undefined, logHi];
   }
   return [lo, hi];
 }
