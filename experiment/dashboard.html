@@ -10,10 +10,13 @@
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px; }
   h1 { text-align: center; margin-bottom: 18px; font-size: 1.5em; color: #333; }
   .controls { background: #fff; border-radius: 8px; padding: 18px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  .slider-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .slider-row label { font-weight: 600; white-space: nowrap; }
   .slider-row input[type=range] { flex: 1; }
   .slider-row .slider-label { min-width: 340px; font-size: 0.95em; color: #555; }
+  .step-btn { width: 32px; height: 32px; font-size: 1.1em; font-weight: 700; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: #333; display: flex; align-items: center; justify-content: center; }
+  .step-btn:hover { background: #eee; }
+  .step-btn:active { background: #ddd; }
   .controls-row { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-bottom: 8px; }
   .controls-row label { font-weight: 600; margin-right: 4px; }
   .checkbox-group { display: flex; gap: 14px; flex-wrap: wrap; }
@@ -44,7 +47,9 @@
   </div>
   <div class="slider-row">
     <label>k/n ratio:</label>
+    <button class="step-btn" id="btnPrev">&lt;</button>
     <input type="range" id="ratioSlider" min="0" max="0" value="0" step="1">
+    <button class="step-btn" id="btnNext">&gt;</button>
     <span class="slider-label" id="sliderLabel">—</span>
   </div>
   <div class="controls-row">
@@ -74,11 +79,13 @@ const nSelect = document.getElementById('nSelect');
 const dSelect = document.getElementById('dSelect');
 const seedSelect = document.getElementById('seedSelect');
 const togglesDiv = document.getElementById('metricToggles');
+const btnPrev = document.getElementById('btnPrev');
+const btnNext = document.getElementById('btnNext');
 
 let prevRatioIdx = null;
 let currentRatioIdx = 0;
-let filteredRatios = [];    // ratios available for current (n, d)
-let filteredRuns = {};      // ratio -> [runs] for current (n, d)
+let filteredRatios = [];
+let filteredRuns = {};
 
 // Build checkboxes
 METRICS.forEach(m => {
@@ -106,7 +113,6 @@ allD.forEach(d => {
   dSelect.appendChild(opt);
 });
 
-// Pick the (n, d) pair with the most runs as default
 const ndCounts = {};
 DATA.runs.forEach(r => {
   const key = r.n + ',' + r.d;
@@ -121,6 +127,17 @@ dSelect.addEventListener('change', onNDChange);
 seedSelect.addEventListener('change', updatePlots);
 slider.addEventListener('input', onSliderChange);
 
+btnPrev.addEventListener('click', function() {
+  const newVal = Math.max(0, parseInt(slider.value) - 1);
+  slider.value = newVal;
+  onSliderChange();
+});
+btnNext.addEventListener('click', function() {
+  const newVal = Math.min(parseInt(slider.max), parseInt(slider.value) + 1);
+  slider.value = newVal;
+  onSliderChange();
+});
+
 function getCheckedMetrics() {
   return Array.from(togglesDiv.querySelectorAll('input:checked')).map(cb => cb.dataset.metric);
 }
@@ -129,7 +146,6 @@ function onNDChange() {
   const n = parseInt(nSelect.value);
   const d = parseInt(dSelect.value);
 
-  // Filter runs for this (n, d)
   filteredRuns = {};
   DATA.runs.forEach(r => {
     if (r.n !== n || r.d !== d) return;
@@ -139,7 +155,6 @@ function onNDChange() {
   });
   filteredRatios = Object.keys(filteredRuns).map(Number).sort((a, b) => a - b);
 
-  // Reset slider
   prevRatioIdx = null;
   currentRatioIdx = 0;
   slider.min = 0;
@@ -178,7 +193,6 @@ function getRunsForRatio(ratioIdx) {
 function getRun(ratioIdx) {
   const runs = getRunsForRatio(ratioIdx);
   if (runs.length === 0) return null;
-  // For previous plot, try to match the currently selected seed
   if (ratioIdx !== currentRatioIdx) {
     const currentRuns = getRunsForRatio(currentRatioIdx);
     const selIdx = parseInt(seedSelect.value) || 0;
