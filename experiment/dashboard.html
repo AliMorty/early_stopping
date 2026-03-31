@@ -147,6 +147,8 @@ btnNext.addEventListener('click', function() {
 });
 
 btnApplyRange.addEventListener('click', updatePlots);
+tMin.addEventListener('keydown', function(e) { if (e.key === 'Enter') updatePlots(); });
+tMax.addEventListener('keydown', function(e) { if (e.key === 'Enter') updatePlots(); });
 btnResetRange.addEventListener('click', function() {
   tMin.value = '';
   tMax.value = '';
