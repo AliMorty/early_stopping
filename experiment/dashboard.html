@@ -54,6 +54,7 @@
   </div>
   <div class="controls-row">
     <div class="checkbox-group" id="metricToggles"></div>
+    <div><label>X-axis:</label> <button class="step-btn" id="btnScale" style="width:auto;padding:0 10px;font-size:0.9em;font-weight:600;">Log</button></div>
   </div>
 </div>
 
@@ -81,6 +82,8 @@ const seedSelect = document.getElementById('seedSelect');
 const togglesDiv = document.getElementById('metricToggles');
 const btnPrev = document.getElementById('btnPrev');
 const btnNext = document.getElementById('btnNext');
+const btnScale = document.getElementById('btnScale');
+let xLog = true;
 
 let prevRatioIdx = null;
 let currentRatioIdx = 0;
@@ -136,6 +139,12 @@ btnNext.addEventListener('click', function() {
   const newVal = Math.min(parseInt(slider.max), parseInt(slider.value) + 1);
   slider.value = newVal;
   onSliderChange();
+});
+
+btnScale.addEventListener('click', function() {
+  xLog = !xLog;
+  btnScale.textContent = xLog ? 'Log' : 'Linear';
+  updatePlots();
 });
 
 function getCheckedMetrics() {
@@ -271,7 +280,7 @@ function buildTraces(run, checkedMetrics) {
 function plotLayout(title) {
   return {
     title: { text: title, font: { size: 13 } },
-    xaxis: { title: 'Iteration t', type: 'log', gridcolor: '#eee' },
+    xaxis: { title: 'Iteration t', type: xLog ? 'log' : 'linear', gridcolor: '#eee' },
     yaxis: { title: 'Normalized value', range: [-0.05, 1.05], gridcolor: '#eee' },
     legend: { orientation: 'h', y: -0.15, x: 0.5, xanchor: 'center' },
     margin: { t: 50, b: 80, l: 50, r: 20 },
