@@ -150,7 +150,7 @@ btnApplyRange.addEventListener('click', updatePlots);
 tMin.addEventListener('keydown', function(e) { if (e.key === 'Enter') updatePlots(); });
 tMax.addEventListener('keydown', function(e) { if (e.key === 'Enter') updatePlots(); });
 btnResetRange.addEventListener('click', function() {
-  tMin.value = '';
+  tMin.value = '0';
   tMax.value = '';
   updatePlots();
 });
