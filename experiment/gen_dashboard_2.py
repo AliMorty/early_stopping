@@ -124,8 +124,8 @@ const METRICS = [
   { key: 'norm',          label: 'Norm',         color: '#2ca02c', timesKey: 'times',         defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'train_loss',    label: 'Train Loss',   color: '#d62728', timesKey: 'loss_times',    defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'pop_loss',      label: 'Test Loss',    color: '#9467bd', timesKey: 'pop_loss_times', defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
-  { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: false, formula: 'raw degrees \u2208 [0\u00b0, 180\u00b0]' },
-  { key: 'angle_w_tilde', label: 'Angle to w\u0303', color: '#ff7f0e', timesKey: 'times',    defaultNorm: false, formula: 'raw degrees \u2208 [0\u00b0, 180\u00b0]' },
+  { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
+  { key: 'angle_w_tilde', label: 'Angle to w\u0303', color: '#ff7f0e', timesKey: 'times',    defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
 ];
 
 // Per-metric state
@@ -253,7 +253,7 @@ function buildTracesAndLayout(run, title) {
     if(!run[m.key]) return;
     const raw = run[m.key];
     const times = run[m.timesKey] || run.times;
-    const y = state[m.key].normalize ? normalize(raw) : raw;
+    const y = state[m.key].normalize ? (m.normFn==='div180' ? raw.map(v=>v/180) : normalize(raw)) : raw;
     traces.push({
       x: times, y,
       type: 'scatter', mode: 'lines',
