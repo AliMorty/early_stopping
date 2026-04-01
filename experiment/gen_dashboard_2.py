@@ -122,7 +122,7 @@ const DATA = __JSON_DATA__;
 
 const METRICS = [
   { key: 'norm',          label: 'Norm',         color: '#2ca02c', timesKey: 'times',         defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
-  { key: 'norm_diff',     label: '||w_t|| \u2212 ||w*_{0:k}||', color: '#17becf', timesKey: 'times', defaultNorm: false, formula: 'raw: ||w_t|| \u2212 ||w*_{0:k}||', computed: true },
+  { key: 'norm_diff',     label: '||w_t|| \u2212 ||w*_{0:k}||', color: '#17becf', timesKey: 'times', defaultNorm: true, formula: 'x / max(|x|)  (no shift)', computed: true, normFn: 'divAbsMax' },
   { key: 'train_loss',    label: 'Train Loss',   color: '#d62728', timesKey: 'loss_times',    defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'pop_loss',      label: 'Test Loss',    color: '#9467bd', timesKey: 'pop_loss_times', defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
@@ -260,7 +260,11 @@ function buildTracesAndLayout(run, title) {
     const raw = m.computed ? run['_'+m.key] : run[m.key];
     if(!raw) return;
     const times = run[m.timesKey] || run.times;
-    const y = state[m.key].normalize ? (m.normFn==='div180' ? raw.map(v=>v/180) : normalize(raw)) : raw;
+    const y = state[m.key].normalize
+      ? (m.normFn==='div180'     ? raw.map(v=>v/180)
+       : m.normFn==='divAbsMax'  ? (v => { const mx=Math.max(...raw.map(Math.abs)); return mx>0 ? raw.map(x=>x/mx) : raw; })()
+       : normalize(raw))
+      : raw;
     traces.push({
       x: times, y,
       type: 'scatter', mode: 'lines',
