@@ -283,8 +283,7 @@ function buildTracesAndLayout(run, title) {
     run.stopping_times.forEach((st, i) => {
       layout.shapes.push({
         type:'line', xref:'x', yref:'paper',
-        x0: xLog ? Math.log10(Math.max(st,1)) : st,
-        x1: xLog ? Math.log10(Math.max(st,1)) : st,
+        x0: st, x1: st,
         y0:0, y1:1,
         line:{color:'red',width:1.5,dash:'dash'},
       });
