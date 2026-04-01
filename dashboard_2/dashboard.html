@@ -81,6 +81,7 @@ const DATA = {"runs": [{"label": "k/n=0.0500 (k=10,n=200,d=500,seed=0)", "k": 10
 
 const METRICS = [
   { key: 'norm',          label: 'Norm',         color: '#2ca02c', timesKey: 'times',         defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
+  { key: 'norm_diff',     label: '||w_t|| \u2212 ||w*_{0:k}||', color: '#17becf', timesKey: 'times', defaultNorm: false, formula: 'raw: ||w_t|| \u2212 ||w*_{0:k}||', computed: true },
   { key: 'train_loss',    label: 'Train Loss',   color: '#d62728', timesKey: 'loss_times',    defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'pop_loss',      label: 'Test Loss',    color: '#9467bd', timesKey: 'pop_loss_times', defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
@@ -209,8 +210,14 @@ function buildTracesAndLayout(run, title) {
 
   METRICS.forEach(m => {
     if(!state[m.key].visible) return;
-    if(!run[m.key]) return;
-    const raw = run[m.key];
+    // Compute derived metrics
+    if(m.computed) {
+      if(m.key==='norm_diff' && run.norm && run.w_star_norm!=null) {
+        run._norm_diff = run.norm.map(v => v - run.w_star_norm);
+      }
+    }
+    const raw = m.computed ? run['_'+m.key] : run[m.key];
+    if(!raw) return;
     const times = run[m.timesKey] || run.times;
     const y = state[m.key].normalize ? (m.normFn==='div180' ? raw.map(v=>v/180) : normalize(raw)) : raw;
     traces.push({
@@ -229,9 +236,9 @@ function buildTracesAndLayout(run, title) {
         traces.push({
           x:[times[0],times[times.length-1]], y:[wStarNormed,wStarNormed],
           type:'scatter', mode:'lines',
-          name:'||w*|| = '+run.w_star_norm.toFixed(2),
+          name:'||w*_{0:'+run.k+'}||',
           line:{color:'gray',width:1.5,dash:'dash'},
-          hovertemplate:'||w*|| = '+run.w_star_norm.toFixed(4)+'<extra></extra>',
+          hovertemplate:'||w*_{0:'+run.k+'}|| = '+run.w_star_norm.toFixed(4)+'<extra></extra>',
         });
       }
     }
