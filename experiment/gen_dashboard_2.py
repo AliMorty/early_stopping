@@ -122,7 +122,7 @@ const DATA = __JSON_DATA__;
 
 const METRICS = [
   { key: 'norm',          label: 'Norm',         color: '#2ca02c', timesKey: 'times',         defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
-  { key: 'norm_diff',     label: '||w_t|| \u2212 ||w*_{0:k}||', color: '#17becf', timesKey: 'times', defaultNorm: true, formula: 'x / max(|x|)  (no shift)', computed: true, normFn: 'divAbsMax' },
+  { key: 'norm_diff',     label: '| ||w_t|| \u2212 ||w*_{0:k}|| |', color: '#17becf', timesKey: 'times', defaultNorm: true, formula: 'x / max(x)  (no shift, x\u22650)', computed: true, normFn: 'divAbsMax' },
   { key: 'train_loss',    label: 'Train Loss',   color: '#d62728', timesKey: 'loss_times',    defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'pop_loss',      label: 'Test Loss',    color: '#9467bd', timesKey: 'pop_loss_times', defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
   { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
@@ -131,7 +131,7 @@ const METRICS = [
 
 // Per-metric state
 const state = {};
-METRICS.forEach(m => { state[m.key] = { visible: true, normalize: m.defaultNorm }; });
+METRICS.forEach(m => { state[m.key] = { visible: true, normalize: m.defaultNorm, showArgmin: false }; });
 
 // Build metric table
 const table = document.getElementById('metricTable');
@@ -164,7 +164,19 @@ METRICS.forEach(m => {
   // Col 3: formula
   const td3 = document.createElement('td');
   td3.className = 'formula'; td3.textContent = m.formula;
-  tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+  // Col 4: argmin toggle
+  const td4 = document.createElement('td');
+  const abtn = document.createElement('button');
+  abtn.className = 'norm-btn off';
+  abtn.textContent = 'Argmin: OFF';
+  abtn.addEventListener('click', () => {
+    state[m.key].showArgmin = !state[m.key].showArgmin;
+    abtn.className = 'norm-btn ' + (state[m.key].showArgmin ? 'on' : 'off');
+    abtn.textContent = 'Argmin: ' + (state[m.key].showArgmin ? 'ON' : 'OFF');
+    updatePlots();
+  });
+  td4.appendChild(abtn);
+  tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
   table.appendChild(tr);
 });
 
@@ -254,7 +266,7 @@ function buildTracesAndLayout(run, title) {
     // Compute derived metrics
     if(m.computed) {
       if(m.key==='norm_diff' && run.norm && run.w_star_norm!=null) {
-        run._norm_diff = run.norm.map(v => v - run.w_star_norm);
+        run._norm_diff = run.norm.map(v => Math.abs(v - run.w_star_norm));
       }
     }
     const raw = m.computed ? run['_'+m.key] : run[m.key];
@@ -273,6 +285,22 @@ function buildTracesAndLayout(run, title) {
       text: raw.map(v => m.label + ' = ' + v.toFixed(4)),
       hovertemplate: '%{text}<br>t = %{x}<extra></extra>',
     });
+    // Argmin vertical line
+    if(state[m.key].showArgmin) {
+      const minIdx = raw.reduce((best, v, i) => v < raw[best] ? i : best, 0);
+      const argminT = times[minIdx];
+      layout.shapes.push({
+        type:'line', xref:'x', yref:'paper',
+        x0: argminT, x1: argminT, y0:0, y1:1,
+        line:{color: m.color, width:1.5, dash:'dot'},
+      });
+      traces.push({
+        x:[null],y:[null],type:'scatter',mode:'lines',
+        name:'argmin('+m.label+') = t'+argminT,
+        line:{color:m.color,width:1.5,dash:'dot'},
+        showlegend:true,
+      });
+    }
     // w* norm reference line (only for norm metric, only when normalized)
     if(m.key==='norm' && state[m.key].normalize && run.w_star_norm!=null) {
       const mn=Math.min(...raw), mx=Math.max(...raw);
