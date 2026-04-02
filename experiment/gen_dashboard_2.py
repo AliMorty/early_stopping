@@ -121,17 +121,17 @@ HTML = r"""<!DOCTYPE html>
 const DATA = __JSON_DATA__;
 
 const METRICS = [
-  { key: 'norm',          label: 'Norm',         color: '#2ca02c', timesKey: 'times',         defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
-  { key: 'norm_diff',     label: '| ||w_t|| \u2212 ||w*_{0:k}|| |', color: '#17becf', timesKey: 'times', defaultNorm: true, formula: 'x / max(x)  (no shift, x\u22650)', computed: true, normFn: 'divAbsMax' },
-  { key: 'train_loss',    label: 'Train Loss',   color: '#d62728', timesKey: 'loss_times',    defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
-  { key: 'pop_loss',      label: 'Test Loss',    color: '#9467bd', timesKey: 'pop_loss_times', defaultNorm: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
-  { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
-  { key: 'angle_w_tilde', label: 'Angle to w\u0303', color: '#ff7f0e', timesKey: 'times',    defaultNorm: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
+  { key: 'norm',          label: 'Norm',         color: '#2ca02c', timesKey: 'times',         defaultNorm: true,  defaultVisible: true,  defaultArgmin: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
+  { key: 'norm_diff',     label: '| ||w_t|| \u2212 ||w*_{0:k}|| |', color: '#17becf', timesKey: 'times', defaultNorm: true, defaultVisible: false, defaultArgmin: true, formula: 'x / max(x)  (no shift, x\u22650)', computed: true, normFn: 'divAbsMax' },
+  { key: 'train_loss',    label: 'Train Loss',   color: '#d62728', timesKey: 'loss_times',    defaultNorm: true,  defaultVisible: true,  defaultArgmin: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
+  { key: 'pop_loss',      label: 'Test Loss',    color: '#9467bd', timesKey: 'pop_loss_times', defaultNorm: true, defaultVisible: false, defaultArgmin: true,  formula: '(x \u2212 min) / (max \u2212 min)' },
+  { key: 'angle_w_star',  label: 'Angle to w\u204e',color: '#1f77b4', timesKey: 'times',     defaultNorm: true,  defaultVisible: false, defaultArgmin: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
+  { key: 'angle_w_tilde', label: 'Angle to w\u0303', color: '#ff7f0e', timesKey: 'times',    defaultNorm: true,  defaultVisible: true,  defaultArgmin: true,  formula: 'x / 180  (no shift, 0\u00b0\u21920, 180\u00b0\u21921)', normFn: 'div180' },
 ];
 
 // Per-metric state
 const state = {};
-METRICS.forEach(m => { state[m.key] = { visible: true, normalize: m.defaultNorm, showArgmin: false }; });
+METRICS.forEach(m => { state[m.key] = { visible: m.defaultVisible, normalize: m.defaultNorm, showArgmin: m.defaultArgmin }; });
 
 // Build metric table
 const table = document.getElementById('metricTable');
@@ -142,7 +142,7 @@ METRICS.forEach(m => {
   const nameDiv = document.createElement('div');
   nameDiv.className = 'metric-name';
   const cb = document.createElement('input');
-  cb.type = 'checkbox'; cb.checked = true;
+  cb.type = 'checkbox'; cb.checked = m.defaultVisible;
   cb.addEventListener('change', () => { state[m.key].visible = cb.checked; updatePlots(); });
   const dot = document.createElement('span');
   dot.className = 'color-dot'; dot.style.background = m.color;
@@ -167,8 +167,8 @@ METRICS.forEach(m => {
   // Col 4: argmin toggle
   const td4 = document.createElement('td');
   const abtn = document.createElement('button');
-  abtn.className = 'norm-btn off';
-  abtn.textContent = 'Argmin: OFF';
+  abtn.className = 'norm-btn ' + (m.defaultArgmin ? 'on' : 'off');
+  abtn.textContent = 'Argmin: ' + (m.defaultArgmin ? 'ON' : 'OFF');
   abtn.addEventListener('click', () => {
     state[m.key].showArgmin = !state[m.key].showArgmin;
     abtn.className = 'norm-btn ' + (state[m.key].showArgmin ? 'on' : 'off');
