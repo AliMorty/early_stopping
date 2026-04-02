@@ -70,8 +70,11 @@ HTML = r"""<!DOCTYPE html>
   .metric-name input[type=checkbox] { cursor: pointer; }
   .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
   .norm-btn { padding: 2px 10px; font-size: 0.82em; font-weight: 600; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; min-width: 78px; }
-  .norm-btn.on  { background: #d4edda; color: #155724; border-color: #c3e6cb; }
-  .norm-btn.off { background: #f8f9fa; color: #6c757d; border-color: #dee2e6; }
+  .norm-btn.on       { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+  .norm-btn.off      { background: #cce5ff; color: #004085; border-color: #b8daff; }
+  .norm-btn.disabled { background: #f0f0f0; color: #bbb;    border-color: #e0e0e0; cursor: not-allowed; }
+  .metric-row-disabled td { opacity: 0.4; }
+  .metric-row-disabled .metric-name input[type=checkbox] { opacity: 1; cursor: pointer; }
   .formula { font-size: 0.82em; color: #888; font-family: 'Courier New', monospace; }
 
   .bottom-row { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -133,6 +136,21 @@ const METRICS = [
 const state = {};
 METRICS.forEach(m => { state[m.key] = { visible: m.defaultVisible, normalize: m.defaultNorm, showArgmin: m.defaultArgmin }; });
 
+function setRowDisabled(tr, disabled) {
+  if(disabled) {
+    tr.classList.add('metric-row-disabled');
+    tr.querySelectorAll('.norm-btn').forEach(b => { b.classList.remove('on','off'); b.classList.add('disabled'); b.disabled = true; });
+  } else {
+    tr.classList.remove('metric-row-disabled');
+    tr.querySelectorAll('.norm-btn').forEach(b => {
+      b.disabled = false;
+      // restore correct on/off state from button text
+      const isOn = b.textContent.includes('ON');
+      b.classList.remove('disabled'); b.classList.add(isOn ? 'on' : 'off');
+    });
+  }
+}
+
 // Build metric table
 const table = document.getElementById('metricTable');
 METRICS.forEach(m => {
@@ -143,7 +161,11 @@ METRICS.forEach(m => {
   nameDiv.className = 'metric-name';
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.checked = m.defaultVisible;
-  cb.addEventListener('change', () => { state[m.key].visible = cb.checked; updatePlots(); });
+  cb.addEventListener('change', () => {
+    state[m.key].visible = cb.checked;
+    setRowDisabled(tr, !cb.checked);
+    updatePlots();
+  });
   const dot = document.createElement('span');
   dot.className = 'color-dot'; dot.style.background = m.color;
   nameDiv.appendChild(cb); nameDiv.appendChild(dot);
@@ -178,6 +200,7 @@ METRICS.forEach(m => {
   td4.appendChild(abtn);
   tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
   table.appendChild(tr);
+  if(!m.defaultVisible) setRowDisabled(tr, true);
 });
 
 // Selects
