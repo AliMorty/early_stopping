@@ -3,8 +3,10 @@ import glob
 import json
 import sys
 import os
+import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from plotting import load_run, compute_metrics
+from model import OverparameterizedLogisticRegression
 
 # ── Load data ────────────────────────────────────────────────────────────────
 pkl_files = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "gd_trajectories/run_*.pkl")))
@@ -31,6 +33,19 @@ for f in pkl_files:
     if "angle_w_tilde"    in metrics: entry["angle_w_tilde"] = metrics["angle_w_tilde"].tolist()
     if "stopping_times"   in metrics: entry["stopping_times"] = [int(t) for t in metrics["stopping_times"]]
     if "w_star_norm"      in metrics: entry["w_star_norm"]   = float(metrics["w_star_norm"])
+    # Compute population loss at w*_{0:k}
+    if data.get("pop_loss_history") is not None:
+        _cfg = data["config"]
+        _model = OverparameterizedLogisticRegression(
+            n=_cfg["n"], d=_cfg["d"], k=_cfg["k"],
+            eigenvalues=np.array(_cfg["eigenvalues"]),
+            w_star=np.array(_cfg["w_star"]),
+            eta=_cfg["eta"], seed=_cfg["seed"],
+        )
+        _w_star_k = np.zeros(_cfg["d"])
+        _w_star_k[:_cfg["k"]] = np.array(_cfg["w_star"])[:_cfg["k"]]
+        _n_samples = int(_cfg.get("pop_samples_per_dim", 25) * _cfg["d"])
+        entry["pop_loss_w_star"] = float(_model.population_logistic_loss(_w_star_k, n_samples=_n_samples))
     runs_by_ratio.setdefault(ratio, []).append(entry)
 
 sorted_ratios = sorted(runs_by_ratio.keys())
@@ -112,6 +127,8 @@ HTML = r"""<!DOCTYPE html>
       <button class="step-btn" id="btnApplyRange" style="width:auto;padding:0 8px;font-size:0.8em;">Apply</button>
       <button class="step-btn" id="btnResetRange" style="width:auto;padding:0 8px;font-size:0.8em;">Reset</button>
     </div>
+    <div><button class="norm-btn on" id="btnStoppingTime">Stopping time: ON</button></div>
+    <div><button class="norm-btn on" id="btnPopLossRef">L(w*) ref: ON</button></div>
   </div>
 </div>
 
@@ -209,10 +226,14 @@ const sliderLabel = document.getElementById('sliderLabel');
 const nSelect   = document.getElementById('nSelect');
 const dSelect   = document.getElementById('dSelect');
 const seedSelect= document.getElementById('seedSelect');
-const btnScale  = document.getElementById('btnScale');
+const btnScale        = document.getElementById('btnScale');
+const btnStoppingTime = document.getElementById('btnStoppingTime');
+const btnPopLossRef   = document.getElementById('btnPopLossRef');
 const tMin      = document.getElementById('tMin');
 const tMax      = document.getElementById('tMax');
 let xLog = true;
+let showStoppingTime = true;
+let showPopLossRef = true;
 let prevRatioIdx = null, currentRatioIdx = 0;
 let filteredRatios = [], filteredRuns = {};
 
@@ -236,6 +257,18 @@ document.getElementById('btnResetRange').addEventListener('click', () => { tMin.
 tMin.addEventListener('keydown', e => { if(e.key==='Enter') updatePlots(); });
 tMax.addEventListener('keydown', e => { if(e.key==='Enter') updatePlots(); });
 btnScale.addEventListener('click', () => { xLog=!xLog; btnScale.textContent=xLog?'Log':'Linear'; updatePlots(); });
+btnStoppingTime.addEventListener('click', () => {
+  showStoppingTime=!showStoppingTime;
+  btnStoppingTime.className='norm-btn '+(showStoppingTime?'on':'off');
+  btnStoppingTime.textContent='Stopping time: '+(showStoppingTime?'ON':'OFF');
+  updatePlots();
+});
+btnPopLossRef.addEventListener('click', () => {
+  showPopLossRef=!showPopLossRef;
+  btnPopLossRef.className='norm-btn '+(showPopLossRef?'on':'off');
+  btnPopLossRef.textContent='L(w*) ref: '+(showPopLossRef?'ON':'OFF');
+  updatePlots();
+});
 
 function round(v) { return Math.round(v*1e6)/1e6; }
 
@@ -338,10 +371,25 @@ function buildTracesAndLayout(run, title) {
         });
       }
     }
+    // L(w*_{0:k}) population loss reference line (only for pop_loss metric)
+    if(m.key==='pop_loss' && showPopLossRef && run.pop_loss_w_star!=null) {
+      let refY = run.pop_loss_w_star;
+      if(state[m.key].normalize) {
+        const mn=Math.min(...raw), mx=Math.max(...raw);
+        if(mx!==mn) refY=(run.pop_loss_w_star-mn)/(mx-mn);
+      }
+      traces.push({
+        x:[times[0],times[times.length-1]], y:[refY,refY],
+        type:'scatter', mode:'lines',
+        name:'L(w*_{0:'+run.k+'})',
+        line:{color:'#9467bd',width:1.5,dash:'dash'},
+        hovertemplate:'L(w*_{0:'+run.k+'}) = '+run.pop_loss_w_star.toFixed(4)+'<extra></extra>',
+      });
+    }
   });
 
   // Stopping time as layout shape (spans full plot height regardless of y scale)
-  if(run.stopping_times) {
+  if(showStoppingTime && run.stopping_times) {
     run.stopping_times.forEach((st, i) => {
       layout.shapes.push({
         type:'line', xref:'x', yref:'paper',
