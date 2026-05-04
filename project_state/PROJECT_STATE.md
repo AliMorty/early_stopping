@@ -69,7 +69,7 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 
 ---
 
-## Current Status (as of 2026-04-02)
+## Current Status (as of 2026-05-04)
 
 ### Done
 - [x] Core GD model (`model.py`) with early stopping detection, population loss tracking
@@ -82,10 +82,9 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - [x] Large-scale experiment plan written (`experiment/large_scale_experiments/plans.md`)
 
 ### In Progress / Next Steps
-- [ ] **Code review (Phase 1)**: verify gradient correctness, stopping time off-by-one, population loss seed, numerical stability, reproducibility in `model.py` and `configs.py`
+- [ ] **Code verification (interactive)**: Ali is walking through the code step-by-step before scaling up. Checklist in `requests/verification_checklist.md`. Not started yet.
+- [ ] **Dashboard 3** (Multi-Run Explorer): M trajectories averaged with confidence bands. Plan in `requests/dashboard_3_plan.md`. Blocked on verification.
 - [ ] **Batch runner script**: loop over seeds and k values, structured output dirs, error handling
-- [ ] **Dashboard 2 extension**: add seed slider and k/n ratio slider (currently single-run only)
-- [ ] **Dashboard 3** (Multi-Run Explorer): averaged view with confidence intervals
 - [ ] **Fix dashboard_1 stopping line**: may have log-axis alignment bug (trace-based `y: [-10, 200]`)
 - [ ] **Decide**: remove `offline_dashboard_1` from repo?
 
