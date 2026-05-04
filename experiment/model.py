@@ -17,7 +17,7 @@ class OverparameterizedLogisticRegression:
     """
 
     def __init__(self, n, d, k, eigenvalues, w_star, eta, seed=0):
-        self.n = n
+        self.n = n 
         self.d = d
         self.k = k
         self.eigenvalues = eigenvalues
@@ -44,13 +44,8 @@ class OverparameterizedLogisticRegression:
     def generate_data(self):
         """Generate n data points from the logistic model."""
         rng = np.random.RandomState(self.seed)
-        Z = rng.randn(self.n, self.d)
-        self.X = Z * np.sqrt(self.eigenvalues)[np.newaxis, :]
-
-        # --- Alternative: library version using multivariate_normal ---
-        # Works for any covariance matrix (not just diagonal).
-        # Sigma = np.diag(self.eigenvalues)
-        # self.X = rng.multivariate_normal(np.zeros(self.d), Sigma, size=self.n)
+        Sigma = np.diag(self.eigenvalues)
+        self.X = rng.multivariate_normal(np.zeros(self.d), Sigma, size=self.n)
 
         logits = self.X @ self.w_star
         probs = 1.0 / (1.0 + np.exp(-logits))
@@ -68,9 +63,15 @@ class OverparameterizedLogisticRegression:
 
     def population_logistic_loss(self, w, n_samples=100000, seed=999):
         """Population logistic risk approximated via Monte Carlo."""
+        # rng = np.random.RandomState(seed)
+        # Z = rng.randn(n_samples, self.d)
+        # X_pop = Z * np.sqrt(self.eigenvalues)[np.newaxis, :]
+
         rng = np.random.RandomState(seed)
-        Z = rng.randn(n_samples, self.d)
-        X_pop = Z * np.sqrt(self.eigenvalues)[np.newaxis, :]
+        Sigma = np.diag(self.eigenvalues) # I don't like this. I want The sigma to be used directly make self.sigma please 
+        X_pop = rng.multivariate_normal(np.zeros(self.d), Sigma, size = n_samples)
+
+
         logits = X_pop @ self.w_star
         probs = 1.0 / (1.0 + np.exp(-logits))
         y_pop = 2.0 * (rng.rand(n_samples) < probs).astype(float) - 1.0
