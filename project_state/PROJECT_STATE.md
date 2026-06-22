@@ -41,6 +41,11 @@ references/
 conjecture 1/               # Old folder (pre-refactor notebooks, kept for reference)
 reviewing_the_code/
   sonnet_review/            # Prior Sonnet code reviews
+
+ali_code/
+  trajectory_plotter.py     # TrajectoryValidationRiskPloter class (plain GD on linear regression)
+  LOOCV-holdout-set-plots.ipynb  # Original notebook (static matplotlib plots)
+  sonnet_visualization.ipynb     # Interactive Jupyter dashboard (plotly + ipywidgets)
 ```
 
 ---
