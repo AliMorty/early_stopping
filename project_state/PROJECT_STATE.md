@@ -88,6 +88,7 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 
 ### In Progress / Next Steps (updated 2026-06-26)
 - [ ] **Code + viz correctness review** (`ali_code/`): Walk through class end-to-end, verify LOOCV and holdout produce sensible results for small known cases before trusting plots.
+- [ ] **Confidence intervals / averaging** (`ali_code/`): Run multiple trajectories over different seeds, average them, plot mean ± std as shaded bands. Start simple — loop over seeds in the viz, stack curves, compute mean and std per iteration.
 - [ ] **Dashboard 3 (HTML)**: LOOCV vs holdout comparison dashboard. Two options to discuss: (a) static HTML with precomputed data like Dashboard 2, or (b) Voilà-based live server. Needs design discussion before building.
 - [x] **LOOCV implemented** in `ali_code/LOOCV-holdout-set-plots.ipynb` — `run_LOOCV`, `run_hold_out_GD`, `generate_samples_and_run_LOOCV` all working.
 - [x] **Interactive Jupyter viz** (`ali_code/sonnet_visualization.ipynb`) — two buttons (Holdout/LOOCV), 5 traces, scale toggles, test error checkboxes.
