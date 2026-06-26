@@ -74,7 +74,7 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 
 ---
 
-## Current Status (as of 2026-05-04)
+## Current Status (as of 2026-06-26)
 
 ### Done
 - [x] Core GD model (`model.py`) with early stopping detection, population loss tracking
@@ -85,13 +85,15 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - [x] Paper transcribed to markdown (`references/main_paper.md`)
 - [x] Code review folder organized (`reviewing_the_code/sonnet_review/`)
 - [x] Large-scale experiment plan written (`experiment/large_scale_experiments/plans.md`)
-
-### In Progress / Next Steps (updated 2026-06-26)
-- [ ] **Code + viz correctness review** (`ali_code/`): Walk through class end-to-end, verify LOOCV and holdout produce sensible results for small known cases before trusting plots.
-- [ ] **Confidence intervals / averaging** (`ali_code/`): Run multiple trajectories over different seeds, average them, plot mean ± std as shaded bands. Start simple — loop over seeds in the viz, stack curves, compute mean and std per iteration.
-- [ ] **Dashboard 3 (HTML)**: LOOCV vs holdout comparison dashboard. Two options to discuss: (a) static HTML with precomputed data like Dashboard 2, or (b) Voilà-based live server. Needs design discussion before building.
 - [x] **LOOCV implemented** in `ali_code/LOOCV-holdout-set-plots.ipynb` — `run_LOOCV`, `run_hold_out_GD`, `generate_samples_and_run_LOOCV` all working.
-- [x] **Interactive Jupyter viz** (`ali_code/sonnet_visualization.ipynb`) — two buttons (Holdout/LOOCV), 5 traces, scale toggles, test error checkboxes.
+- [x] **GCV implemented** — `run_GCV`, `generate_samples_and_run_GCV`. Uses eigenvalue formula `tr[H_k] = sum_j [1-(1-eta*lambda_j)^k]` with eigenvalues of gram matrix precomputed once.
+- [x] **Interactive Jupyter viz** (`ali_code/sonnet_visualization.ipynb`) — three buttons (Holdout/LOOCV/GCV), 7 traces, scale toggles, test error checkboxes.
+- [x] `evaluate` fixed to use `1/n` (not `1/(2n)`), matching paper definition exactly.
+
+### In Progress / Next Steps (updated 2026-06-26_2)
+- [ ] **Code + viz correctness review** (`ali_code/`): Run buttons with small n, p, max_T and verify curves make sense (train decreases, LOOCV ≈ test, GCV diverges in overparameterized regime).
+- [ ] **Confidence intervals / averaging** (`ali_code/`): Run multiple trajectories over different seeds, average them, plot mean ± std as shaded bands.
+- [ ] **Dashboard 3 (HTML)**: LOOCV vs holdout vs GCV comparison dashboard. Two options: (a) static HTML with precomputed data, or (b) Voilà-based live server. Needs design discussion before building.
 - [ ] **Code verification (main experiment)**: Ali is walking through `experiment/model.py` step-by-step before scaling up. Checklist in `requests/verification_checklist.md`. Checklist in `requests/verification_checklist.md`. Not started yet.
 - [ ] **Dashboard 3** (Multi-Run Explorer): M trajectories averaged with confidence bands. Plan in `requests/dashboard_3_plan.md`. Blocked on verification.
 - [ ] **Batch runner script**: loop over seeds and k values, structured output dirs, error handling

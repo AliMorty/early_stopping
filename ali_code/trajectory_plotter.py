@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-
 class TrajectoryValidationRiskPloter:
     def __init__(self, test_samples = 1e5, random_seed = 42):
         self.X = None
@@ -193,7 +192,7 @@ class TrajectoryValidationRiskPloter:
     def evaluate(self, w, X, y):
         n = len(X)
         r = y - X @ w
-        return np.dot(r,r) / (2 * n) 
+        return np.dot(r,r) / ( n) 
         
 
     def run_hold_out_GD(self, n = 3000 , p = 6000, m=2000, test_sample_size =1e4, 
@@ -238,6 +237,53 @@ class TrajectoryValidationRiskPloter:
         return LOOCV_error, test_error_aggregate
 
 
+
+    ### warning the following is LLM GENERATED
+    def run_GCV(self, X_train, y_train, eta=0.1, max_T=5000,
+            test_error_tracking=False, X_test=None, y_test=None):
+
+        n, p = X_train.shape
+        max_T = int(max_T)
+
+        # Precompute eigenvalues of gram matrix — use smaller of XX^T/n or X^TX/n
+        if n <= p:
+            gram = X_train @ X_train.T / n  # n×n
+        else:
+            gram = X_train.T @ X_train / n  # p×p
+        eigvals = np.linalg.eigvalsh(gram)
+        eigvals = eigvals[eigvals > 1e-10]  # drop numerical zeros
+
+        w = np.zeros(p)
+        gcv_over_time = []
+        test_error_over_time = [] if test_error_tracking else None
+
+        for k in range(max_T):
+            # tr[H_k] = sum_j [1 - (1 - eta * lambda_j)^k]
+            trace_Hk = np.sum(1 - (1 - eta * eigvals) ** k)
+            dof_correction = (1 - trace_Hk / n) ** 2
+
+            gcv_over_time.append(self.evaluate(w, X_train, y_train) / dof_correction)
+
+            if test_error_tracking:
+                test_error_over_time.append(self.evaluate(w, X_test, y_test))
+
+            # gradient step
+            w = w + (eta / n) * X_train.T @ (y_train - X_train @ w)
+
+        return gcv_over_time, test_error_over_time
+
+
+    def generate_samples_and_run_GCV(self, n=3000, p=6000, test_sample_size=1e4,
+                                    test_error_tracking=False, eta=0.1, max_T=1e5):
+            X_train, y_train = self.generate_data(n=n, p=p)
+
+            X_test, y_test = None, None
+            if test_error_tracking:
+                X_test, y_test = self.generate_data(n=int(test_sample_size), p=p)
+
+            return self.run_GCV(X_train, y_train, eta=eta, max_T=max_T,
+                                test_error_tracking=test_error_tracking,
+                                X_test=X_test, y_test=y_test)
 
 
     def plot_trajectories(self, arrays: dict, title: str = "Risk over GD Iterations"): 
