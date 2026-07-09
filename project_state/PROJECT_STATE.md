@@ -42,10 +42,17 @@ conjecture 1/               # Old folder (pre-refactor notebooks, kept for refer
 reviewing_the_code/
   sonnet_review/            # Prior Sonnet code reviews
 
-ali_code/
-  trajectory_plotter.py     # TrajectoryValidationRiskPloter class (plain GD on linear regression)
+ali_code/                   # ROOT = Ali's algorithm code (assistant NEVER edits — see CLAUDE.md)
+  logistic_regression_hold_out.ipynb  # LogisticRegressionClass (GD, losses, data gen) — source of truth
+  logistic_regression.py    # nbconvert of the `module`-tagged cells above (regenerated, never hand-edited)
   LOOCV-holdout-set-plots.ipynb  # Original notebook (static matplotlib plots)
-  sonnet_visualization.ipynb     # Interactive Jupyter dashboard (plotly + ipywidgets)
+  LLM_visualization/        # Assistant-owned visualization code (free to edit)
+    build_logistic_module.py        # notebook (opt-in `module` cells) -> ../logistic_regression.py
+    build_logistic_viz_notebook.py  # generator for logistic_visualization.ipynb
+    logistic_visualization.ipynb    # Interactive dashboard for the logistic model
+    sonnet_visualization.ipynb      # Interactive dashboard (linear regression)
+    trajectory_plotter.py           # TrajectoryValidationRiskPloter (plain GD on linear regression)
+    logistic_cache/                 # setup-hashed pkls + index.json (resume/extend cache)
 ```
 
 ---
@@ -71,10 +78,16 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - **Population loss samples scale with d** — `int(pop_samples_per_dim * d)` MC samples
 - **Eigenvalues**: power-law `i^{-2}` by default
 - **w\*** = first k components = 1, rest = 0
+- **Code ownership by location (`ali_code/`)** — anything in `ali_code/` root is Ali's algorithm
+  code and is never edited by the assistant; assistant-owned visualization code lives in
+  `ali_code/LLM_visualization/`. Enforced via the "Protected Algorithm Code" section of `CLAUDE.md`.
+- **Logistic dashboard cache** — pkls keyed on **setup only** (not steps); more steps **extend** the
+  cached trajectory by resuming from the stored `w_last_iterate` on the stored data (exact, since GD
+  is deterministic). Data is stored in the pkl (not regenerated).
 
 ---
 
-## Current Status (as of 2026-06-26)
+## Current Status (as of 2026-07-07)
 
 ### Done
 - [x] Core GD model (`model.py`) with early stopping detection, population loss tracking
@@ -89,8 +102,21 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - [x] **GCV implemented** — `run_GCV`, `generate_samples_and_run_GCV`. Uses eigenvalue formula `tr[H_k] = sum_j [1-(1-eta*lambda_j)^k]` with eigenvalues of gram matrix precomputed once.
 - [x] **Interactive Jupyter viz** (`ali_code/sonnet_visualization.ipynb`) — three buttons (Holdout/LOOCV/GCV), 7 traces, scale toggles, test error checkboxes.
 - [x] `evaluate` fixed to use `1/n` (not `1/(2n)`), matching paper definition exactly.
+- [x] **Logistic notebook → importable module** — `logistic_regression.py` via opt-in `module`-tagged
+  cells + `build_logistic_module.py` (Option B; notebook stays authoritative).
+- [x] **Interactive logistic dashboard** (`ali_code/LLM_visualization/logistic_visualization.ipynb`) —
+  Plotly + ipywidgets: log-loss & zero-one figures, X/Y scale toggles, parameter memory
+  (`last_params.json`), past-runs dropdown, and oracle + validation-argmin stop lines. All curves and
+  stop lines are toggled by **clicking legend entries** (checkboxes removed). Status message
+  distinguishes load / extend / fresh-compute.
+- [x] **Resume/extend pkl cache** (setup-hashed, stores data + `w_last_iterate`); verified
+  extend == from-scratch exactly. Ali added `"w_last_iterate"` to `run_GD_for_t_steps`.
+- [x] **Code-ownership convention** — `ali_code/` root = Ali's; `ali_code/LLM_visualization/` = LLM's;
+  encoded in `CLAUDE.md`.
 
-### In Progress / Next Steps (updated 2026-06-26_2)
+### In Progress / Next Steps (updated 2026-07-07)
+- [ ] **Confirm the logistic dashboard renders** in Jupyter (widget interactivity untested headlessly).
+- [ ] **Compare dashboard output to paper Figure 1** at larger scale (d=2000, n=1000).
 - [ ] **Code + viz correctness review** (`ali_code/`): Run buttons with small n, p, max_T and verify curves make sense (train decreases, LOOCV ≈ test, GCV diverges in overparameterized regime).
 - [ ] **Confidence intervals / averaging** (`ali_code/`): Run multiple trajectories over different seeds, average them, plot mean ± std as shaded bands.
 - [ ] **Dashboard 3 (HTML)**: LOOCV vs holdout vs GCV comparison dashboard. Two options: (a) static HTML with precomputed data, or (b) Voilà-based live server. Needs design discussion before building.

@@ -8,6 +8,17 @@
 - Only modify what the user explicitly requests. Do not resolve open questions, change design decisions, or update things "while you're at it" without asking first.
 - If you notice something that could be improved or a decision that could be resolved, flag it and ask — do not act on it unilaterally.
 
+## Protected Algorithm Code — NEVER Edit (protection by location)
+- **Any file directly in `ali_code/` (its root) is Ali's own code. NEVER modify it** — not a one-line change, "obvious" fix, or refactor. This includes the algorithm classes, notebooks, and any generated module artifact sitting in the root.
+- **LLM-generated / assistant-owned files live in `LLM_*` subfolders of `ali_code/`** (e.g. `ali_code/LLM_visualization/`). You may freely create and edit files there.
+- If a task appears to require changing protected (root) code, **stop and describe the exact edit for the user to make themselves** (quote the lines and the change). Do not apply it. Wait for the user to make the change and confirm. Prefer solving the problem in the `LLM_*` folder instead; only surface a protected-code change as a last resort suggestion.
+- Regenerating a derived artifact (e.g. running `build_logistic_module.py` to rebuild `logistic_regression.py` from the notebook) is allowed — that is generation, not hand-editing the source.
+
+## Be Careful When Deleting or Testing
+- **Never `rm`, overwrite, or otherwise erase files in directories that hold the user's data, caches, or outputs** (e.g. `ali_code/LLM_visualization/logistic_cache/`, saved `.pkl` runs, `index.json`, `last_params.json`). These may contain results the user created and cannot easily regenerate.
+- **When you need scratch space to test something, create and use a separate throwaway directory** (e.g. under `/tmp/`, or a clearly-named `*_tmp/` folder) — never the live data directory. Point test caches/outputs at the temp dir. Clean up your own temp dir, not the user's.
+- **Before any deletion or overwrite, confirm what you are removing is something you created for the test**, not user data. If unsure, stop and ask.
+
 ## Token Efficiency
 - Prefer writing and running scripts over predicting output by hand. Write code, execute it, and use the actual result.
 - Avoid loading large data into context unnecessarily — let scripts handle it instead.
