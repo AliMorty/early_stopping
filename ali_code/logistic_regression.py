@@ -3,7 +3,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[3]:
+# In[2]:
 
 
 import numpy as np
@@ -185,8 +185,8 @@ class LogisticRegressionClass:
 
         # find oracle stopping point: first t where L_hat(w_t) <= L_hat(w*_{0:k})
         oracle_stop_opt_length = None
-        if show_oracular_early_stopping and L_hat_of_w_start_zero_to_k is not None and logistic_loss_validation_trajectory is not None:
-            for t, loss in enumerate(logistic_loss_validation_trajectory):
+        if show_oracular_early_stopping and L_hat_of_w_start_zero_to_k is not None and logistic_loss_training_trajectory is not None:
+            for t, loss in enumerate(logistic_loss_training_trajectory):
                 if loss <= L_hat_of_w_start_zero_to_k:
                     oracle_stop_opt_length = eta * t
                     break
@@ -365,29 +365,25 @@ class LogisticRegressionClass:
             "projected_trajectories": projected_trajectories,
         }
         # ------------------------------------------
+
+
+        # ------------------------------------------
+
     def LLM_generated_region_experiment_v2(self, number_of_trajectories, w_star,
                                             d=None, n=None, t_steps=1000, eta=None,
                                             Sigma=None, lambda_diag=None, use_lambda_diag=True,
-                                            normalize_w_tilde=False, plot=True, 
-                                            test_sample_size = int(3e3),
-                                            measure_population_loss_for_iterates = True,
+                                            normalize_w_tilde=False, plot=True,
+                                            test_sample_size=int(3e3),
+                                            measure_population_loss_for_iterates=True,
                                             ):
-        # Similar to V1 version of the function, except that, 
-        # we are also generating test samples (if measure_population_loss_for_iterates = True). 
-        # For each trajectory, we want to keep track of the early stopping point and argmin of test loss (population loss)
-
-        # LLM GENERATED PART ----------------------
-        # Extends V1: besides collecting GD trajectories + max-margin w_tilde and
-        # projecting onto (w_star, sum w_tilde), we also (optionally) approximate
-        # the *population* loss with a single held-out test set of size
-        # `test_sample_size`, and per trajectory we record two stopping points:
-        #   - test_loss_argmin_index: argmin_t of the (population) test logistic loss
-        #                             -> the "best" iterate to stop at.
-        #   - early_stop_index:       first t with training loss <= L_hat(w*_{0:k})
-        #                             -> the oracular early-stopping rule used in
-        #                                plot_loss_over_time.
-        # Indices are into w_trajectory (loss[t] corresponds to w_trajectory[t]).
-        # ------------------------------------------
+        # Similar to V1, except we also generate a shared test set (if
+        # measure_population_loss_for_iterates=True) to approximate the population loss.
+        # Per trajectory we record two stopping points (both indices into w_trajectory,
+        # since loss[t] corresponds to w_trajectory[t]):
+        #   - early_stop_t:        first t with TRAINING loss <= L_hat(w*_{0:k})
+        #                          (the oracular early-stopping rule; training-based).
+        #   - test_loss_argmin_t:  argmin_t of the population (test) logistic loss
+        #                          -> the "best" iterate to stop at.
         if d is None:
             d = self.d
         if n is None:
@@ -395,8 +391,8 @@ class LogisticRegressionClass:
         if eta is None:
             eta = self.eta
 
-        # single shared test set approximating the population (same data distribution
-        # for every trajectory, so one test set suffices).
+        # single shared test set approximating the population (same distribution for
+        # every trajectory, so one test set suffices).
         X_test = y_test = None
         if measure_population_loss_for_iterates:
             X_test, y_test = self.generate_data(
@@ -406,7 +402,7 @@ class LogisticRegressionClass:
 
         trajectories = []
         w_tildes = []
-        early_stop_t = []        # per trajectory: t of oracular early stop
+        early_stop_t = []        # per trajectory: t of training-based oracular early stop
         test_loss_argmin_t = []  # per trajectory: t of argmin population (test) loss
 
         for i in range(number_of_trajectories):
@@ -429,18 +425,17 @@ class LogisticRegressionClass:
             trajectories.append(trajectory)
             w_tildes.append(w_tilde)
 
+            train_log_loss = result["log_loss_train"]
             test_log_loss = result["log_loss_test"]
 
-            # oracular early-stopping point: first t with L_hat(w_t) <= L_hat(w*_{0:k}),
-            # measured on HELD-OUT (test) data so it reflects population, not training,
-            # behavior. Both the threshold L_hat(w*) and the loss trajectory use X_test.
+            # early-stopping point: first t with L_train(w_t) <= L_train(w*_{0:k}).
+            # Both the threshold and the loss trajectory use the TRAINING data.
+            L_hat_w_star = self.oracular_ell_hat_w_star_zero_to_k(X_data, y_data, w_star)
             es_t = None
-            if measure_population_loss_for_iterates and len(test_log_loss) > 0:
-                L_hat_w_star = self.oracular_ell_hat_w_star_zero_to_k(X_test, y_test, w_star)
-                for t, loss in enumerate(test_log_loss):
-                    if loss <= L_hat_w_star:
-                        es_t = t
-                        break
+            for t, loss in enumerate(train_log_loss):
+                if loss <= L_hat_w_star:
+                    es_t = t
+                    break
             early_stop_t.append(es_t)
 
             # argmin of the population (test) logistic loss
@@ -473,7 +468,6 @@ class LogisticRegressionClass:
                          label=f"trajectory {idx}")
                 plt.scatter(proj[0, 0], proj[0, 1], color="black", zorder=5)  # start
                 plt.scatter(proj[-1, 0], proj[-1, 1], color="red", zorder=5)  # end
-                # mark the two stopping points along the trajectory
                 es = early_stop_t[idx]
                 am = test_loss_argmin_t[idx]
                 if es is not None:
@@ -500,5 +494,4 @@ class LogisticRegressionClass:
             "early_stop_t": early_stop_t,
             "test_loss_argmin_t": test_loss_argmin_t,
         }
-        # ------------------------------------------
 
