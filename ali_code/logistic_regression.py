@@ -3,15 +3,16 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[3]:
 
 
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import cvxpy as cp
 
 
-# In[ ]:
+# In[5]:
 
 
 class LogisticRegressionClass:
@@ -86,7 +87,8 @@ class LogisticRegressionClass:
                            , store_log_loss_traj_for_test = False
                            , store_zero_one_loss_traj_for_training = True
                            , store_zero_one_loss_traj_for_validation = False
-                           , store_zero_one_loss_traj_for_test = False):
+                           , store_zero_one_loss_traj_for_test = False
+                           , store_w_trajectory = True):
 
         if w_0 is None:
             w_0 = np.zeros(self.d)#.reshape(-1,1)
@@ -101,7 +103,13 @@ class LogisticRegressionClass:
         zero_one_loss_validation_trajectory = []
         zero_one_loss_test_trajectory = []
 
+        w_trajectory = []
+
         w_current = w_0
+
+        # store w_0
+        if store_w_trajectory:
+            w_trajectory.append(w_current)
 
         for t in range(t_steps):
             # measure the error for w_prev
@@ -144,18 +152,23 @@ class LogisticRegressionClass:
             w_new = w_current - eta * self.grad(w_current, X_data, y_data)
             w_current = w_new
 
-        return { # LLM suggested
+            # store the w_t
+            if store_w_trajectory:
+                w_trajectory.append(w_current)
+
+        return { 
             "log_loss_train": logistic_loss_training_trajectory,
             "log_loss_valid": logistic_loss_validation_trajectory,
             "log_loss_test": logistic_loss_test_trajectory,
             "zero_one_train": zero_one_loss_training_trajectory,
             "zero_one_valid": zero_one_loss_validation_trajectory,
             "zero_one_test": zero_one_loss_test_trajectory,
+            "w_trajectory": w_trajectory,
             "w_last_iterate": w_current
         }
 
 
-    def plot(self, logistic_loss_training_trajectory=None, zero_one_loss_training_trajectory=None,
+    def plot_loss_over_time(self, logistic_loss_training_trajectory=None, zero_one_loss_training_trajectory=None,
          logistic_loss_validation_trajectory=None, zero_one_loss_validation_trajectory=None,
          logistic_loss_test_trajectory=None, zero_one_loss_test_trajectory=None, eta=None,
          bayes_logistic_risk=None, bayes_zero_one_risk=None,
@@ -230,6 +243,127 @@ class LogisticRegressionClass:
         plt.tight_layout()
         plt.show()
 
-    def hold_out_set(self):
+    def find_w_tilde(self, X_data, y_data, normalize=False): # Note: LLM generated
+        n, d = X_data.shape
+        Xy = X_data * y_data[:, None]                      # rows: y_i * x_i
+
+        w = cp.Variable(d)
+        objective = cp.Minimize(0.5 * cp.sum_squares(w))
+        constraints = [Xy @ w >= 1]                        # y_i (x_i . w) >= 1
+        prob = cp.Problem(objective, constraints)
+        prob.solve()
+
+        if prob.status not in ("optimal", "optimal_inaccurate"):
+            raise RuntimeError(f"SVM QP not solved (status={prob.status}); "
+                            "is the data linearly separable?")
+        w_val = np.asarray(w.value).ravel()
+        return w_val / np.linalg.norm(w_val) if normalize else w_val
+
+
+
+    def region_experiment_v1(self,number_of_trajectories):
+
+        # trajectories = []
+
+        # generate data for k = number of trajectories
+        # for i in range (0, k)
+        # run GD for each one
+        # # 1) Store the trajectory
+        # # 2) find w_tilde
+        # trajectories[i] = trajectory
+        # w_tilde[i] = w_tilde
+        # then plot all trajectories in space of 
+        # w_1 = w^*
+        # w_2 = sum of all w_tilde[i]
+        # see how it looks
+        # I'm testinggg11
+        # 1
         pass
+
+    def plot_trajectory_over(self, w_1, w_2, trajectory_dict_perhaps):
+        pass
+
+    def LLM_generated_region_experiment_v1(self, number_of_trajectories, w_star,
+                                            d=None, n=None, t_steps=1000, eta=None,
+                                            Sigma=None, lambda_diag=None, use_lambda_diag=True,
+                                            normalize_w_tilde=False, plot=True):
+
+        # LLM GENERATED PART ----------------------
+        # Implements the plan sketched in region_experiment_v1:
+        #   for each of `number_of_trajectories` runs, generate fresh data,
+        #   run GD to get a trajectory, and find its max-margin w_tilde.
+        # Then project every trajectory onto the 2D space spanned by
+        #   w_1 = w_star (normalized) and w_2 = normalized sum of all w_tilde[i],
+        # and plot the projected trajectories.
+        # ------------------------------------------
+        # Note: Ali looked at this code, seems fine, I didn't dig into the plot sections 
+        # but anything before, it was fine. Confidence 80%
+        # ------------------------------------------
+        if d is None:
+            d = self.d
+        if n is None:
+            n = self.n
+        if eta is None:
+            eta = self.eta
+
+        trajectories = []
+        w_tildes = []
+
+        for i in range(number_of_trajectories):
+            X_data, y_data = self.generate_data(
+                d, n, w_star, Sigma=Sigma, lambda_diag=lambda_diag,
+                use_lambda_diag=use_lambda_diag
+            )
+
+            result = self.run_GD_for_t_steps(
+                X_data, y_data, eta=eta, t_steps=t_steps,
+                store_w_trajectory=True
+            )
+            trajectory = result["w_trajectory"]
+
+            w_tilde = self.find_w_tilde(X_data, y_data, normalize=normalize_w_tilde)
+
+            trajectories.append(trajectory)
+            w_tildes.append(w_tilde)
+
+        # w_1 axis: direction of w_star
+        w_star_norm = np.linalg.norm(w_star)
+        w_1_direction = w_star / w_star_norm if w_star_norm > 0 else w_star
+
+        # w_2 axis: direction of the sum of all w_tilde[i]
+        w_tilde_sum = np.sum(w_tildes, axis=0)
+        w_tilde_sum_norm = np.linalg.norm(w_tilde_sum)
+        w_2_direction = w_tilde_sum / w_tilde_sum_norm if w_tilde_sum_norm > 0 else w_tilde_sum
+
+        # project each trajectory onto (w_1_direction, w_2_direction)
+        projected_trajectories = []
+        for trajectory in trajectories:
+            W = np.array(trajectory)  # shape (t_steps+1, d)
+            proj_1 = W @ w_1_direction
+            proj_2 = W @ w_2_direction
+            projected_trajectories.append(np.stack([proj_1, proj_2], axis=1))
+
+        if plot:
+            plt.figure(figsize=(7, 7))
+            for idx, proj in enumerate(projected_trajectories):
+                plt.plot(proj[:, 0], proj[:, 1], marker="o", markersize=2,
+                         label=f"trajectory {idx}")
+                plt.scatter(proj[0, 0], proj[0, 1], color="black", zorder=5)  # start
+                plt.scatter(proj[-1, 0], proj[-1, 1], color="red", zorder=5)  # end
+            plt.xlabel("w_1 = w* direction")
+            plt.ylabel("w_2 = sum(w_tilde) direction")
+            plt.title("GD trajectories projected onto (w*, sum w_tilde) plane")
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+
+        return {
+            "trajectories": trajectories,
+            "w_tildes": w_tildes,
+            "w_1_direction": w_1_direction,
+            "w_2_direction": w_2_direction,
+            "projected_trajectories": projected_trajectories,
+        }
+        # ------------------------------------------
+
 
