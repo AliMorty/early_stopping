@@ -50,12 +50,15 @@ ali_code/                   # ROOT = Ali's algorithm code (assistant NEVER edits
     build_logistic_module.py        # notebook (opt-in `module` cells) -> ../logistic_regression.py
     build_logistic_viz_notebook.py  # generator for logistic_visualization.ipynb
     logistic_visualization.ipynb    # Interactive dashboard for the logistic model
+    build_region_visualization_notebook.py  # generator for region_visualization.ipynb
+    region_visualization.ipynb      # Control-panel dashboard for the region-of-trajectories plot
+                                    #   (v1/v2, time-encoded ticks, w*/w_tilde rays, v2 stop markers)
     sonnet_visualization.ipynb      # Interactive dashboard (linear regression)
     trajectory_plotter.py           # TrajectoryValidationRiskPloter (plain GD on linear regression)
-    w_plane_trajectories.py         # standalone helpers: find_w_tilde (GD) / find_w_tilde_svm (cvxpy
-                                    #   max-margin QP), collect_w_trajectory, basis_from_vectors,
-                                    #   pca_basis, project, plot_trajectory_over (2D plane plots)
+    w_plane_trajectories.py         # UNUSED/irrelevant (notebook does projection inline). Standalone
+                                    #   helpers: find_w_tilde / find_w_tilde_svm (cvxpy), etc.
     logistic_cache/                 # setup-hashed pkls + index.json (resume/extend cache)
+    region_cache/                   # region-run cache: compact 2D-projected data, one entry/setting
 ```
 
 ---
@@ -78,6 +81,15 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - **Save raw trajectories, compute metrics at plot time** — flexible for adding new metrics later
 - **`.pkl` files are self-contained** — include config, w_init, w_history, loss_history, pop_loss_history, w_tilde, stopping_times, timestamp, X, y
 - **Early stopping is two-sided** — sandwich condition from Theorem 3.1: L̂(w_{t-1}) ≤ L̂(w*_{0:k}) ≤ L̂(w_{t-2})
+- **Early stopping is defined on the TRAINING error** — first `t` with `L_train(w_t) ≤ L_train(w*_{0:k})`.
+  (2026-07-14: this went back and forth — briefly switched to validation/test then reverted. Training is
+  correct.) Used by `plot_loss_over_time`, the driver cell threshold, and `..._v2`'s `early_stop_t`.
+  Distinct from `test_loss_argmin_t`, which is the population/test-loss argmin (the oracle "best iterate"
+  the practical training-based stop is compared against).
+- **Region-run cache** (`region_cache/`) — stores **only the compact 2D-projected data** needed to
+  redraw (projected trajectories, `w*`/`w_tilde` projections, `early_stop_t`, `test_loss_argmin_t`),
+  NOT the full weight trajectories. Cache key **ignores `t_steps`**: one entry per setting, larger T
+  extends it (recompute+overwrite, deterministic superset), smaller/equal T reloads the stored max-T.
 - **Population loss samples scale with d** — `int(pop_samples_per_dim * d)` MC samples
 - **Eigenvalues**: power-law `i^{-2}` by default
 - **w\*** = first k components = 1, rest = 0
@@ -90,7 +102,7 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 
 ---
 
-## Current Status (as of 2026-07-07)
+## Current Status (as of 2026-07-14)
 
 ### Done
 - [x] Core GD model (`model.py`) with early stopping detection, population loss tracking
@@ -121,8 +133,17 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - [x] **Region-of-trajectories experiment** (`LLM_generated_region_experiment_v1` in
   `ali_code/logistic_regression_hold_out.ipynb`) — runs GD for `k` trajectories, computes
   `w_tilde` per trajectory, projects all iterates onto the 2D plane spanned by `w*` and
-  `sum_i w_tilde_i`, plots them. Code + driver cell committed (`2749f55`) but **not yet run**
-  to confirm the output is sane — do that first before building on top of it.
+  `sum_i w_tilde_i`, plots them.
+- [x] **`LLM_generated_region_experiment_v2`** (2026-07-14) — extends v1 with a shared held-out test
+  set; per trajectory returns `early_stop_t` (first `t` with `L_train(w_t) ≤ L_train(w*)`, TRAINING-based)
+  and `test_loss_argmin_t` (population/test-loss argmin). (Method was re-added to the class cell by the
+  assistant with Ali's explicit authorization after an accidental deletion.)
+- [x] **`region_visualization.ipynb`** (2026-07-14) — interactive plotly dashboard for the region plot:
+  control-panel inputs (version v1/v2, n/d/k/n_traj/t_steps/eta/seed/test_size, normalize toggle,
+  n_ticks slider), Run/load button, saved-runs dropdown. Time is encoded by **tick density** (+ hover
+  step number); `w*` = gold diamond, each `w_tilde_i` = color-matched dashed asymptote ray; v2 adds
+  green-square early-stop + purple-star test-argmin markers. Compact `region_cache/` (see design
+  decisions). **Has a known bug — see Known Bugs (renders multiple copies of the figure).**
 
 ### In Progress / Next Steps (updated 2026-07-13)
 - [x] **Trajectory-plane helper module** (`ali_code/LLM_visualization/w_plane_trajectories.py`) —
@@ -130,21 +151,17 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
   QP; installed cvxpy 1.9.2), `collect_w_trajectory`, `basis_from_vectors`, `pca_basis`, `project`,
   `plot_trajectory_over`. Written to be copied into the notebook class by Ali. Smoke-tested.
   See `session_summaries/2026-07-13_2.md`.
-- [ ] **Run/verify the region-experiment cell** in `logistic_regression_hold_out.ipynb` and
-  sanity-check the projected trajectories (do they visibly separate / converge as expected?).
-- [ ] **Visualize round/step number along a trajectory line.** Currently the projected
-  trajectories are plain lines with no indication of GD round. Ali wants a "ruler tick marks"
-  feel or similar. Candidate approaches: color gradient along the line keyed to step index
-  (viridis colormap via scatter-colored-by-t), sparse markers every N steps with hover/labels,
-  marker size scaling with step index, an animated/slider reveal, or arrow markers showing
-  direction of travel. Prototype 1–2 options and check with Ali which reads best. See
-  `session_summaries/2026-07-13.md` for full detail.
-- [ ] **Highlight early stopping time on the region-experiment plot**, analogous to the
-  oracle-stop (green) / validation-argmin (purple) markers already used in
-  `plot_loss_over_time` — mark the corresponding `(proj_1[t_stop], proj_2[t_stop])` point on
-  each projected trajectory.
-- [ ] **Possible new dashboard wrapping the region experiment** — not decided yet; needs a
-  design discussion with Ali before building (similar in spirit to `logistic_visualization.ipynb`).
+- [ ] **FIX THE MULTI-PLOT BUG in `region_visualization.ipynb`** (see Known Bugs) — highest priority
+  next step; Ali explicitly deferred it to the next agent.
+- [x] **Visualize round/step number along a trajectory line** — done via equal-step tick density +
+  hover step number in `region_visualization.ipynb` (2026-07-14).
+- [x] **Highlight early stopping time on the region plot** — done: v2 green-square early-stop +
+  purple-star test-argmin markers (2026-07-14).
+- [x] **Dashboard wrapping the region experiment** — done: `region_visualization.ipynb` control panel
+  + cache (2026-07-14).
+- [ ] **Run/verify the region plots at full scale** (`t_steps=1e5`) in the notebook and confirm the
+  projected trajectories look sane (visible separation, convergence toward the `w_tilde` rays, stop
+  markers landing in reasonable places).
 - [ ] **Confirm the logistic dashboard renders** in Jupyter (widget interactivity untested headlessly).
 - [ ] **Compare dashboard output to paper Figure 1** at larger scale (d=2000, n=1000).
 - [ ] **Code + viz correctness review** (`ali_code/`): Run buttons with small n, p, max_T and verify curves make sense (train decreases, LOOCV ≈ test, GCV diverges in overparameterized regime).
@@ -168,5 +185,11 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 
 ## Known Bugs
 
+- **`region_visualization.ipynb` control panel renders MULTIPLE copies of the figure (~3) instead of
+  one** (2026-07-14). One double-draw was fixed (`_on_run` plotted via both the dropdown observer and a
+  direct call) but Ali reports 3 still appear. Deferred to the next agent. Investigate `cell_panel`:
+  overlapping observer fires (`_on_select` on `run_dd`, `_on_ticks` on `w_ticks`) + `_refresh_dd()`'s
+  options-reassignment + the explicit `_plot_key` path; and whether `out.clear_output(wait=True)` is
+  failing to collapse successive plotly `.show()` outputs. Do NOT assume it is fixed.
 - `dashboard_1` stopping line may be misaligned on log x-axis (not yet investigated)
 - `offline_dashboard_1` had iPad rendering issue (no longer prioritized)
