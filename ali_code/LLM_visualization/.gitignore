@@ -1,3 +1,4 @@
 # runtime artifacts — not source
 logistic_cache/
+region_cache/
 last_params.json

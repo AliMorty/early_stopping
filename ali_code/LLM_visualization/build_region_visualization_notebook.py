@@ -17,11 +17,13 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "region_visualization.ipynb"
 
 cell_imports = '''\
-import os, sys
+import os, sys, json, hashlib, pickle
 # logistic_regression.py (Ali's nbconvert'd algorithm) lives in ali_code/, the parent of this LLM_visualization/ folder
 sys.path.insert(0, os.path.abspath(".."))
 import numpy as np
 import plotly.graph_objects as go
+import ipywidgets as widgets
+from IPython.display import display
 
 from logistic_regression import LogisticRegressionClass
 '''
@@ -45,28 +47,15 @@ end-segment. This notebook makes that visible:
 
 cell_params = '''\
 # --- experiment setup (edit freely) ---
+# Only scalars here (cheap). The heavy GD runs happen in the plot cells below and are
+# cached, so re-running an identical setup reloads instead of recomputing.
 n = 100
 d = 200
 k = 10
 number_of_trajectories = 3
 t_steps = int(1e5)      # the whole point: many steps, so the log-time bunching shows
-
-w_star = np.zeros(d)
-w_star[:k] = 1
-lambda_diag = np.arange(1, d + 1, dtype=float) ** (-2)
 eta = 0.1
-
-logistic_class_instance = LogisticRegressionClass(n, d, random_seed=85)
-
-result = logistic_class_instance.LLM_generated_region_experiment_v1(
-    number_of_trajectories=number_of_trajectories,
-    w_star=w_star, d=d, n=n, t_steps=t_steps, eta=eta,
-    use_lambda_diag=True, lambda_diag=lambda_diag,
-    normalize_w_tilde=False,
-    plot=False,          # we render our own interactive plot below
-)
-projected_trajectories = result["projected_trajectories"]
-print("trajectories:", len(projected_trajectories), "| shape each:", projected_trajectories[0].shape)
+seed = 85               # class random_seed; part of a run's identity
 '''
 
 cell_plot_fn = '''\
@@ -201,22 +190,120 @@ def plot_trajectories_with_time(projected_trajectories, n_ticks=400, tick_every=
     return fig
 '''
 
+cell_cache = '''\
+# --- run cache: save only the 2D-projected data needed to redraw a plot ---
+# GD is the slow part; once a setup is run we pickle the compact plot data so an
+# identical setup reloads instantly. index.json lets the dropdown (bottom of the
+# notebook) browse past runs without opening any pkl.
+CACHE_DIR = "region_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+INDEX_FILE = os.path.join(CACHE_DIR, "index.json")
+
+# fields stored per run (also the searchable label)
+SETUP_KEYS = ["version", "n", "d", "k", "number_of_trajectories", "t_steps",
+              "eta", "seed", "test_sample_size", "normalize_w_tilde", "use_lambda_diag"]
+# a run's IDENTITY ignores t_steps: asking for more steps extends the same entry, so
+# there is exactly one cache entry per setting and it holds the highest T computed.
+IDENTITY_KEYS = [key for key in SETUP_KEYS if key != "t_steps"]
+
+def config_key(setup):
+    payload = {k: setup[k] for k in IDENTITY_KEYS}
+    return hashlib.md5(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:8]
+
+def load_index():
+    try:
+        with open(INDEX_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def _update_index(key, setup):
+    idx = load_index()
+    idx[key] = {k: setup[k] for k in SETUP_KEYS}
+    with open(INDEX_FILE, "w") as f:
+        json.dump(idx, f, indent=2)
+
+def run_label(key, s):
+    return (f"[{key}] {s['version']} | n{s['n']} d{s['d']} k{s['k']} "
+            f"traj{s['number_of_trajectories']} T{s['t_steps']} eta{s['eta']} "
+            f"seed{s['seed']} test{s['test_sample_size']}")
+
+def run_or_load_region(setup, force=False):
+    """Load compact plot data for `setup` from cache, or run the experiment + save it.
+    setup['version'] selects v1 (no stop markers) or v2 (early-stop + test argmin).
+    Returns (plotdata, key). Pass force=True to recompute and overwrite."""
+    setup = dict(setup)
+    key = config_key(setup)
+    path = os.path.join(CACHE_DIR, f"region_{key}.pkl")
+    if os.path.exists(path) and not force:
+        with open(path, "rb") as f:
+            pd = pickle.load(f)
+        # cached entry already has >= the requested steps: reuse it (it's the highest T).
+        if pd["setup"]["t_steps"] >= setup["t_steps"]:
+            print("loaded", run_label(key, pd["setup"]))
+            return pd, key
+        # asking for more steps: recompute at the larger T and overwrite the one entry.
+        print(f"extending T {pd['setup']['t_steps']} -> {setup['t_steps']} (recompute)")
+
+    w_star = np.zeros(setup["d"]); w_star[:setup["k"]] = 1.0
+    lam = np.arange(1, setup["d"] + 1, dtype=float) ** (-2)
+    inst = LogisticRegressionClass(setup["n"], setup["d"],
+                                   random_seed=setup["seed"], eta=setup["eta"])
+    common = dict(number_of_trajectories=setup["number_of_trajectories"], w_star=w_star,
+                  d=setup["d"], n=setup["n"], t_steps=setup["t_steps"], eta=setup["eta"],
+                  use_lambda_diag=setup["use_lambda_diag"], lambda_diag=lam,
+                  normalize_w_tilde=setup["normalize_w_tilde"], plot=False)
+    if setup["version"] == "v2":
+        result = inst.LLM_generated_region_experiment_v2(
+            test_sample_size=setup["test_sample_size"],
+            measure_population_loss_for_iterates=True, **common)
+        early_stop_t = list(result["early_stop_t"])
+        test_loss_argmin_t = list(result["test_loss_argmin_t"])
+    else:
+        result = inst.LLM_generated_region_experiment_v1(**common)
+        early_stop_t = [None] * setup["number_of_trajectories"]
+        test_loss_argmin_t = [None] * setup["number_of_trajectories"]
+
+    w1, w2 = result["w_1_direction"], result["w_2_direction"]
+    pd = {
+        "setup": {k: setup[k] for k in SETUP_KEYS},
+        "projected_trajectories": [np.asarray(p) for p in result["projected_trajectories"]],
+        "w_star_proj": (float(w_star @ w1), float(w_star @ w2)),
+        "w_tilde_dirs": [(float(wt @ w1), float(wt @ w2)) for wt in result["w_tildes"]],
+        "early_stop_t": early_stop_t,
+        "test_loss_argmin_t": test_loss_argmin_t,
+    }
+    with open(path, "wb") as f:
+        pickle.dump(pd, f)
+    _update_index(key, setup)
+    print("computed + saved", run_label(key, pd["setup"]))
+    return pd, key
+
+def load_region_run(key):
+    with open(os.path.join(CACHE_DIR, f"region_{key}.pkl"), "rb") as f:
+        return pickle.load(f)
+
+def plot_from_plotdata(pd, n_ticks=400, title=None):
+    """Rebuild the interactive figure from cached compact plot data."""
+    proj = pd["projected_trajectories"]
+    es = [tuple(proj[i][t]) for i, t in enumerate(pd["early_stop_t"]) if t is not None]
+    am = [tuple(proj[i][t]) for i, t in enumerate(pd["test_loss_argmin_t"]) if t is not None]
+    return plot_trajectories_with_time(
+        proj, n_ticks=n_ticks, mark_points={"w*": pd["w_star_proj"]},
+        w_tilde_dirs=pd["w_tilde_dirs"], early_stop_pts=es, argmin_pts=am,
+        title=title or f"region run [{config_key(pd['setup'])}]",
+    )
+'''
+
 cell_render = '''\
-# project w* into the SAME plane so its size can be compared to the trajectories.
-# axis 1 is the w* direction, so w*'s x-coordinate is exactly ||w*||.
-w1, w2 = result["w_1_direction"], result["w_2_direction"]
-w_star_proj = (float(w_star @ w1), float(w_star @ w2))
-
-# project each trajectory's w_tilde_i (max-margin direction) into the plane, so we can
-# see whether trajectory i is converging toward its own w~_i ray.
-w_tilde_dirs = [(float(wt @ w1), float(wt @ w2)) for wt in result["w_tildes"]]
-
-fig = plot_trajectories_with_time(
-    projected_trajectories, n_ticks=400,
-    mark_points={"w*": w_star_proj},
-    w_tilde_dirs=w_tilde_dirs,
-)
-fig.show()
+# V1 plot (no stop markers). Cached: identical setup reloads instead of re-running GD.
+setup_v1 = dict(version="v1", n=n, d=d, k=k,
+                number_of_trajectories=number_of_trajectories, t_steps=t_steps,
+                eta=eta, seed=seed, test_sample_size=None,
+                normalize_w_tilde=False, use_lambda_diag=True)
+pd1, key1 = run_or_load_region(setup_v1)          # force=True to recompute
+plot_from_plotdata(pd1, n_ticks=400,
+                   title=f"V1 region run [{key1}]").show()
 '''
 
 cell_md_zoom = '''\
@@ -246,48 +333,133 @@ end-cluster — zoom in.
 '''
 
 cell_render_v2 = '''\
-result_v2 = logistic_class_instance.LLM_generated_region_experiment_v2(
-    number_of_trajectories=number_of_trajectories,
-    w_star=w_star, d=d, n=n, t_steps=t_steps, eta=eta,
-    use_lambda_diag=True, lambda_diag=lambda_diag,
-    normalize_w_tilde=False,
-    test_sample_size=int(3e3),
-    measure_population_loss_for_iterates=True,
-    plot=False,
-)
+# V2 plot: early-stop (green square) + test-loss argmin (purple star). Cached.
+setup_v2 = dict(version="v2", n=n, d=d, k=k,
+                number_of_trajectories=number_of_trajectories, t_steps=t_steps,
+                eta=eta, seed=seed, test_sample_size=int(3e3),
+                normalize_w_tilde=False, use_lambda_diag=True)
+pd2, key2 = run_or_load_region(setup_v2)          # force=True to recompute
+plot_from_plotdata(pd2, n_ticks=400,
+                   title=f"V2: early-stop (green sq) & test-loss argmin (purple star) [{key2}]").show()
+'''
 
-proj2 = result_v2["projected_trajectories"]
-w1b, w2b = result_v2["w_1_direction"], result_v2["w_2_direction"]
-w_star_proj2 = (float(w_star @ w1b), float(w_star @ w2b))
-w_tilde_dirs2 = [(float(wt @ w1b), float(wt @ w2b)) for wt in result_v2["w_tildes"]]
+cell_md_panel = '''\
+## Control panel
 
-# map the recorded stop indices onto the projected trajectory coordinates
-early_stop_pts = [tuple(proj2[i][es]) for i, es in enumerate(result_v2["early_stop_t"])
-                  if es is not None]
-argmin_pts     = [tuple(proj2[i][am]) for i, am in enumerate(result_v2["test_loss_argmin_t"])
-                  if am is not None]
+Enter a setup, pick **v1** (no stop markers) or **v2** (early-stop green square +
+test-loss argmin purple star), and hit **Run / load** — it computes GD once and caches
+it, or reloads instantly if that exact setup was run before. The **saved runs** dropdown
+lists every cached run (selecting one refills the fields and redraws it); the `n_ticks`
+slider re-renders the current run at a different tick density. `t_steps` accepts `1e5` /
+`100k` / `100000`.
 
-fig2 = plot_trajectories_with_time(
-    proj2, n_ticks=400,
-    mark_points={"w*": w_star_proj2},
-    w_tilde_dirs=w_tilde_dirs2,
-    early_stop_pts=early_stop_pts,
-    argmin_pts=argmin_pts,
-    title="V2: trajectories with early-stop (green sq) & test-loss argmin (purple star)",
-)
-fig2.show()
+There is **one cache entry per setting** (everything except `t_steps`). Asking for a
+larger `t_steps` on the same setting extends that single entry to the higher T; asking
+for a smaller/equal `t_steps` just reloads the stored (highest-T) run.
+'''
+
+cell_panel = '''\
+def _parse_int(s):
+    s = str(s).strip().lower()
+    return int(float(s[:-1]) * 1000) if s.endswith("k") else int(float(s))
+
+_st = {"description_width": "115px"}; _lo = widgets.Layout(width="215px")
+def _T(desc, val): return widgets.Text(value=str(val), description=desc, style=_st, layout=_lo)
+
+w_ver   = widgets.Dropdown(options=["v2", "v1"], value="v2", description="version:",
+                           style=_st, layout=_lo)
+w_n     = _T("n:", n);      w_d = _T("d:", d);   w_k = _T("k:", k)
+w_ntraj = _T("n_traj:", number_of_trajectories); w_tstep = _T("t_steps:", t_steps)
+w_eta   = _T("eta:", eta);  w_seed = _T("seed:", seed)
+w_test  = _T("test_size:", int(3e3))
+w_norm  = widgets.Checkbox(value=False, description="normalize_w_tilde", indent=False)
+w_ticks = widgets.IntSlider(value=400, min=50, max=1500, step=50, description="n_ticks:",
+                            style=_st, layout=widgets.Layout(width="340px"))
+
+run_btn = widgets.Button(description="Run / load", button_style="primary",
+                         layout=widgets.Layout(width="120px"))
+run_dd  = widgets.Dropdown(options=[], description="saved runs:", style=_st,
+                           layout=widgets.Layout(width="680px"))
+status  = widgets.Label(value="")
+out     = widgets.Output()
+
+def _setup_from_inputs():
+    ver = w_ver.value
+    return dict(version=ver, n=_parse_int(w_n.value), d=_parse_int(w_d.value),
+                k=_parse_int(w_k.value), number_of_trajectories=_parse_int(w_ntraj.value),
+                t_steps=_parse_int(w_tstep.value), eta=float(w_eta.value),
+                seed=_parse_int(w_seed.value),
+                test_sample_size=(_parse_int(w_test.value) if ver == "v2" else None),
+                normalize_w_tilde=bool(w_norm.value), use_lambda_diag=True)
+
+def _fill_inputs(s):
+    w_ver.value = s["version"]; w_n.value = str(s["n"]); w_d.value = str(s["d"])
+    w_k.value = str(s["k"]); w_ntraj.value = str(s["number_of_trajectories"])
+    w_tstep.value = str(s["t_steps"]); w_eta.value = str(s["eta"])
+    w_seed.value = str(s["seed"])
+    if s["test_sample_size"] is not None: w_test.value = str(s["test_sample_size"])
+    w_norm.value = bool(s["normalize_w_tilde"])
+
+def _refresh_dd():
+    run_dd.unobserve(_on_select, names="value")
+    idx = load_index()
+    run_dd.options = [(run_label(k, s), k) for k, s in sorted(idx.items())]
+    run_dd.observe(_on_select, names="value")
+
+def _plot_key(key):
+    with out:
+        out.clear_output(wait=True)
+        plot_from_plotdata(load_region_run(key), n_ticks=w_ticks.value).show()
+
+def _on_run(_=None):
+    status.value = "running / loading (GD can take a while the first time)..."
+    try:
+        pd, key = run_or_load_region(_setup_from_inputs())
+    except Exception as e:
+        status.value = f"error: {e}"; raise
+    _refresh_dd()
+    if run_dd.value == key:
+        _plot_key(key)          # value unchanged -> observer won't fire; plot once here
+    else:
+        run_dd.value = key      # value change fires _on_select -> plots once
+    status.value = f"showing [{key}]"
+
+def _on_select(change):
+    key = change["new"]
+    if key is None: return
+    _fill_inputs(load_region_run(key)["setup"]); _plot_key(key)
+
+def _on_ticks(_):
+    if run_dd.value is not None: _plot_key(run_dd.value)
+
+run_btn.on_click(_on_run)
+run_dd.observe(_on_select, names="value")
+w_ticks.observe(_on_ticks, names="value")
+
+display(widgets.VBox([
+    widgets.HBox([w_ver, w_n, w_d, w_k]),
+    widgets.HBox([w_ntraj, w_tstep, w_eta, w_seed]),
+    widgets.HBox([w_test, w_norm, w_ticks]),
+    widgets.HBox([run_btn, status]),
+    run_dd,
+    out,
+]))
+_refresh_dd()
+with out:
+    print("enter a setup and click Run / load, or pick a saved run from the dropdown.")
 '''
 
 nb = nbf.v4.new_notebook()
 nb.cells = [
     nbf.v4.new_code_cell(cell_imports),
     nbf.v4.new_markdown_cell(cell_md_intro),
-    nbf.v4.new_code_cell(cell_params),
+    nbf.v4.new_code_cell(cell_params),      # default values that prefill the control panel
     nbf.v4.new_code_cell(cell_plot_fn),
-    nbf.v4.new_code_cell(cell_render),
-    nbf.v4.new_markdown_cell(cell_md_zoom),
+    nbf.v4.new_code_cell(cell_cache),
     nbf.v4.new_markdown_cell(cell_md_v2),
-    nbf.v4.new_code_cell(cell_render_v2),
+    nbf.v4.new_markdown_cell(cell_md_zoom),
+    nbf.v4.new_markdown_cell(cell_md_panel),
+    nbf.v4.new_code_cell(cell_panel),
 ]
 nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
 nbf.write(nb, str(OUT))
