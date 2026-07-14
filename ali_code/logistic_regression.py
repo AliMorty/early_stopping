@@ -12,7 +12,7 @@ import math
 import cvxpy as cp
 
 
-# In[5]:
+# In[ ]:
 
 
 class LogisticRegressionClass:
@@ -185,8 +185,8 @@ class LogisticRegressionClass:
 
         # find oracle stopping point: first t where L_hat(w_t) <= L_hat(w*_{0:k})
         oracle_stop_opt_length = None
-        if show_oracular_early_stopping and L_hat_of_w_start_zero_to_k is not None and logistic_loss_training_trajectory is not None:
-            for t, loss in enumerate(logistic_loss_training_trajectory):
+        if show_oracular_early_stopping and L_hat_of_w_start_zero_to_k is not None and logistic_loss_validation_trajectory is not None:
+            for t, loss in enumerate(logistic_loss_validation_trajectory):
                 if loss <= L_hat_of_w_start_zero_to_k:
                     oracle_stop_opt_length = eta * t
                     break
@@ -365,5 +365,140 @@ class LogisticRegressionClass:
             "projected_trajectories": projected_trajectories,
         }
         # ------------------------------------------
+    def LLM_generated_region_experiment_v2(self, number_of_trajectories, w_star,
+                                            d=None, n=None, t_steps=1000, eta=None,
+                                            Sigma=None, lambda_diag=None, use_lambda_diag=True,
+                                            normalize_w_tilde=False, plot=True, 
+                                            test_sample_size = int(3e3),
+                                            measure_population_loss_for_iterates = True,
+                                            ):
+        # Similar to V1 version of the function, except that, 
+        # we are also generating test samples (if measure_population_loss_for_iterates = True). 
+        # For each trajectory, we want to keep track of the early stopping point and argmin of test loss (population loss)
 
+        # LLM GENERATED PART ----------------------
+        # Extends V1: besides collecting GD trajectories + max-margin w_tilde and
+        # projecting onto (w_star, sum w_tilde), we also (optionally) approximate
+        # the *population* loss with a single held-out test set of size
+        # `test_sample_size`, and per trajectory we record two stopping points:
+        #   - test_loss_argmin_index: argmin_t of the (population) test logistic loss
+        #                             -> the "best" iterate to stop at.
+        #   - early_stop_index:       first t with training loss <= L_hat(w*_{0:k})
+        #                             -> the oracular early-stopping rule used in
+        #                                plot_loss_over_time.
+        # Indices are into w_trajectory (loss[t] corresponds to w_trajectory[t]).
+        # ------------------------------------------
+        if d is None:
+            d = self.d
+        if n is None:
+            n = self.n
+        if eta is None:
+            eta = self.eta
+
+        # single shared test set approximating the population (same data distribution
+        # for every trajectory, so one test set suffices).
+        X_test = y_test = None
+        if measure_population_loss_for_iterates:
+            X_test, y_test = self.generate_data(
+                d, int(test_sample_size), w_star, Sigma=Sigma,
+                lambda_diag=lambda_diag, use_lambda_diag=use_lambda_diag
+            )
+
+        trajectories = []
+        w_tildes = []
+        early_stop_t = []        # per trajectory: t of oracular early stop
+        test_loss_argmin_t = []  # per trajectory: t of argmin population (test) loss
+
+        for i in range(number_of_trajectories):
+            X_data, y_data = self.generate_data(
+                d, n, w_star, Sigma=Sigma, lambda_diag=lambda_diag,
+                use_lambda_diag=use_lambda_diag
+            )
+
+            result = self.run_GD_for_t_steps(
+                X_data, y_data, eta=eta, t_steps=t_steps,
+                X_test=X_test, y_test=y_test,
+                store_w_trajectory=True,
+                store_log_loss_traj_for_training=True,
+                store_log_loss_traj_for_test=measure_population_loss_for_iterates,
+            )
+            trajectory = result["w_trajectory"]
+
+            w_tilde = self.find_w_tilde(X_data, y_data, normalize=normalize_w_tilde)
+
+            trajectories.append(trajectory)
+            w_tildes.append(w_tilde)
+
+            test_log_loss = result["log_loss_test"]
+
+            # oracular early-stopping point: first t with L_hat(w_t) <= L_hat(w*_{0:k}),
+            # measured on HELD-OUT (test) data so it reflects population, not training,
+            # behavior. Both the threshold L_hat(w*) and the loss trajectory use X_test.
+            es_t = None
+            if measure_population_loss_for_iterates and len(test_log_loss) > 0:
+                L_hat_w_star = self.oracular_ell_hat_w_star_zero_to_k(X_test, y_test, w_star)
+                for t, loss in enumerate(test_log_loss):
+                    if loss <= L_hat_w_star:
+                        es_t = t
+                        break
+            early_stop_t.append(es_t)
+
+            # argmin of the population (test) logistic loss
+            am_t = None
+            if measure_population_loss_for_iterates and len(test_log_loss) > 0:
+                am_t = int(np.argmin(test_log_loss))
+            test_loss_argmin_t.append(am_t)
+
+        # w_1 axis: direction of w_star
+        w_star_norm = np.linalg.norm(w_star)
+        w_1_direction = w_star / w_star_norm if w_star_norm > 0 else w_star
+
+        # w_2 axis: direction of the sum of all w_tilde[i]
+        w_tilde_sum = np.sum(w_tildes, axis=0)
+        w_tilde_sum_norm = np.linalg.norm(w_tilde_sum)
+        w_2_direction = w_tilde_sum / w_tilde_sum_norm if w_tilde_sum_norm > 0 else w_tilde_sum
+
+        # project each trajectory onto (w_1_direction, w_2_direction)
+        projected_trajectories = []
+        for trajectory in trajectories:
+            W = np.array(trajectory)  # shape (t_steps+1, d)
+            proj_1 = W @ w_1_direction
+            proj_2 = W @ w_2_direction
+            projected_trajectories.append(np.stack([proj_1, proj_2], axis=1))
+
+        if plot:
+            plt.figure(figsize=(7, 7))
+            for idx, proj in enumerate(projected_trajectories):
+                plt.plot(proj[:, 0], proj[:, 1], marker="o", markersize=2,
+                         label=f"trajectory {idx}")
+                plt.scatter(proj[0, 0], proj[0, 1], color="black", zorder=5)  # start
+                plt.scatter(proj[-1, 0], proj[-1, 1], color="red", zorder=5)  # end
+                # mark the two stopping points along the trajectory
+                es = early_stop_t[idx]
+                am = test_loss_argmin_t[idx]
+                if es is not None:
+                    plt.scatter(proj[es, 0], proj[es, 1], color="green",
+                                marker="s", zorder=6,
+                                label="early stop" if idx == 0 else None)
+                if am is not None:
+                    plt.scatter(proj[am, 0], proj[am, 1], color="purple",
+                                marker="*", s=120, zorder=6,
+                                label="test-loss argmin" if idx == 0 else None)
+            plt.xlabel("w_1 = w* direction")
+            plt.ylabel("w_2 = sum(w_tilde) direction")
+            plt.title("GD trajectories projected onto (w*, sum w_tilde) plane")
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+
+        return {
+            "trajectories": trajectories,
+            "w_tildes": w_tildes,
+            "w_1_direction": w_1_direction,
+            "w_2_direction": w_2_direction,
+            "projected_trajectories": projected_trajectories,
+            "early_stop_t": early_stop_t,
+            "test_loss_argmin_t": test_loss_argmin_t,
+        }
+        # ------------------------------------------
 
