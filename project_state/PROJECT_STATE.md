@@ -112,9 +112,31 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - [x] **Resume/extend pkl cache** (setup-hashed, stores data + `w_last_iterate`); verified
   extend == from-scratch exactly. Ali added `"w_last_iterate"` to `run_GD_for_t_steps`.
 - [x] **Code-ownership convention** — `ali_code/` root = Ali's; `ali_code/LLM_visualization/` = LLM's;
-  encoded in `CLAUDE.md`.
+  encoded in `CLAUDE.md`. (2026-07-13: one-off authorized exception — Ali directed adding
+  `LLM_generated_region_experiment_v1` directly into `logistic_regression_hold_out.ipynb`;
+  see that date's session summary. Still ask before touching `ali_code/` root otherwise.)
+- [x] **Region-of-trajectories experiment** (`LLM_generated_region_experiment_v1` in
+  `ali_code/logistic_regression_hold_out.ipynb`) — runs GD for `k` trajectories, computes
+  `w_tilde` per trajectory, projects all iterates onto the 2D plane spanned by `w*` and
+  `sum_i w_tilde_i`, plots them. Code + driver cell committed (`2749f55`) but **not yet run**
+  to confirm the output is sane — do that first before building on top of it.
 
-### In Progress / Next Steps (updated 2026-07-07)
+### In Progress / Next Steps (updated 2026-07-13)
+- [ ] **Run/verify the region-experiment cell** in `logistic_regression_hold_out.ipynb` and
+  sanity-check the projected trajectories (do they visibly separate / converge as expected?).
+- [ ] **Visualize round/step number along a trajectory line.** Currently the projected
+  trajectories are plain lines with no indication of GD round. Ali wants a "ruler tick marks"
+  feel or similar. Candidate approaches: color gradient along the line keyed to step index
+  (viridis colormap via scatter-colored-by-t), sparse markers every N steps with hover/labels,
+  marker size scaling with step index, an animated/slider reveal, or arrow markers showing
+  direction of travel. Prototype 1–2 options and check with Ali which reads best. See
+  `session_summaries/2026-07-13.md` for full detail.
+- [ ] **Highlight early stopping time on the region-experiment plot**, analogous to the
+  oracle-stop (green) / validation-argmin (purple) markers already used in
+  `plot_loss_over_time` — mark the corresponding `(proj_1[t_stop], proj_2[t_stop])` point on
+  each projected trajectory.
+- [ ] **Possible new dashboard wrapping the region experiment** — not decided yet; needs a
+  design discussion with Ali before building (similar in spirit to `logistic_visualization.ipynb`).
 - [ ] **Confirm the logistic dashboard renders** in Jupyter (widget interactivity untested headlessly).
 - [ ] **Compare dashboard output to paper Figure 1** at larger scale (d=2000, n=1000).
 - [ ] **Code + viz correctness review** (`ali_code/`): Run buttons with small n, p, max_T and verify curves make sense (train decreases, LOOCV ≈ test, GCV diverges in overparameterized regime).
