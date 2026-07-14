@@ -52,6 +52,9 @@ ali_code/                   # ROOT = Ali's algorithm code (assistant NEVER edits
     logistic_visualization.ipynb    # Interactive dashboard for the logistic model
     sonnet_visualization.ipynb      # Interactive dashboard (linear regression)
     trajectory_plotter.py           # TrajectoryValidationRiskPloter (plain GD on linear regression)
+    w_plane_trajectories.py         # standalone helpers: find_w_tilde (GD) / find_w_tilde_svm (cvxpy
+                                    #   max-margin QP), collect_w_trajectory, basis_from_vectors,
+                                    #   pca_basis, project, plot_trajectory_over (2D plane plots)
     logistic_cache/                 # setup-hashed pkls + index.json (resume/extend cache)
 ```
 
@@ -122,6 +125,11 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
   to confirm the output is sane — do that first before building on top of it.
 
 ### In Progress / Next Steps (updated 2026-07-13)
+- [x] **Trajectory-plane helper module** (`ali_code/LLM_visualization/w_plane_trajectories.py`) —
+  standalone `find_w_tilde` (GD, non-separable) / `find_w_tilde_svm` (exact max-margin via **cvxpy**
+  QP; installed cvxpy 1.9.2), `collect_w_trajectory`, `basis_from_vectors`, `pca_basis`, `project`,
+  `plot_trajectory_over`. Written to be copied into the notebook class by Ali. Smoke-tested.
+  See `session_summaries/2026-07-13_2.md`.
 - [ ] **Run/verify the region-experiment cell** in `logistic_regression_hold_out.ipynb` and
   sanity-check the projected trajectories (do they visibly separate / converge as expected?).
 - [ ] **Visualize round/step number along a trajectory line.** Currently the projected
