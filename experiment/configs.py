@@ -7,32 +7,33 @@ from datetime import datetime
 def power_law_config(d, k):
     """Default config: eigenvalues = i^{-2}, w* = first k components = 1."""
     eigenvalues = np.array([(i + 1) ** (-2) for i in range(d)])
+    Sigma = np.diag(eigenvalues)
     w_star = np.zeros(d)
     w_star[:k] = 1.0
-    return eigenvalues, w_star
+    return Sigma, w_star
 
 
-def theoretical_eta(eigenvalues, n, C0=2.0, delta=0.01):
+def theoretical_eta(Sigma, n, C0=2.0, delta=0.01):
     """Step size upper bound from Theorem 3.1."""
-    tr_sigma = np.sum(eigenvalues)
-    lambda_1 = eigenvalues[0]
+    tr_sigma = np.trace(Sigma)
+    lambda_1 = np.max(np.linalg.eigvalsh(Sigma))
     return 1.0 / (C0 * (1 + tr_sigma + lambda_1 * np.log(1.0 / delta) / n))
 
 
-def create_model(n, d, k, eigenvalues=None, w_star=None, eta=None, seed=0):
+def create_model(n, d, k, Sigma=None, w_star=None, eta=None, seed=0):
     """Convenience function: fills in defaults and returns a model."""
     from model import OverparameterizedLogisticRegression
 
-    if eigenvalues is None and w_star is None:
-        eigenvalues, w_star = power_law_config(d, k)
-    elif eigenvalues is None or w_star is None:
-        raise ValueError("Provide both eigenvalues and w_star, or neither.")
+    if Sigma is None and w_star is None:
+        Sigma, w_star = power_law_config(d, k)
+    elif Sigma is None or w_star is None:
+        raise ValueError("Provide both Sigma and w_star, or neither.")
 
     if eta is None:
-        eta = theoretical_eta(eigenvalues, n)
+        eta = theoretical_eta(Sigma, n)
 
     return OverparameterizedLogisticRegression(
-        n=n, d=d, k=k, eigenvalues=eigenvalues, w_star=w_star, eta=eta, seed=seed
+        n=n, d=d, k=k, Sigma=Sigma, w_star=w_star, eta=eta, seed=seed
     )
 
 
@@ -46,7 +47,7 @@ def run_and_save(model, save_dir="gd_trajectories"):
             "d": model.d,
             "k": model.k,
             "seed": model.seed,
-            "eigenvalues": model.eigenvalues,
+            "Sigma": model.Sigma,
             "w_star": model.w_star,
             "eta": model.eta,
             "num_iterations": model.t_current,

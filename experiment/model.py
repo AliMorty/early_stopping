@@ -12,20 +12,19 @@ class OverparameterizedLogisticRegression:
     Data model:
         x ~ N(0, Sigma),  Pr(y|x) = 1 / (1 + exp(-y * x^T w*))
 
-    Covariance Sigma = U diag(lambda_1, ..., lambda_d) U^T where U = I
-    (we work directly in the eigenbasis).
+    Covariance Sigma can be any positive semi-definite matrix.
     """
 
-    def __init__(self, n, d, k, eigenvalues, w_star, eta, seed=0):
-        self.n = n 
+    def __init__(self, n, d, k, Sigma, w_star, eta, seed=0):
+        self.n = n
         self.d = d
         self.k = k
-        self.eigenvalues = eigenvalues
+        self.Sigma = Sigma
         self.w_star = w_star
         self.eta = eta
         self.seed = seed
 
-        tr_sigma = np.sum(self.eigenvalues)
+        tr_sigma = np.trace(self.Sigma)
         print(f'Parameters: d={d}, n={n}, k={k}')
         print(f'tr(Sigma) = {tr_sigma:.4f}')
         print(f'eta (used) = {self.eta:.6f}')
@@ -44,8 +43,7 @@ class OverparameterizedLogisticRegression:
     def generate_data(self):
         """Generate n data points from the logistic model."""
         rng = np.random.RandomState(self.seed)
-        Sigma = np.diag(self.eigenvalues)
-        self.X = rng.multivariate_normal(np.zeros(self.d), Sigma, size=self.n)
+        self.X = rng.multivariate_normal(np.zeros(self.d), self.Sigma, size=self.n)
 
         logits = self.X @ self.w_star
         probs = 1.0 / (1.0 + np.exp(-logits))
@@ -63,13 +61,8 @@ class OverparameterizedLogisticRegression:
 
     def population_logistic_loss(self, w, n_samples=100000, seed=999):
         """Population logistic risk approximated via Monte Carlo."""
-        # rng = np.random.RandomState(seed)
-        # Z = rng.randn(n_samples, self.d)
-        # X_pop = Z * np.sqrt(self.eigenvalues)[np.newaxis, :]
-
         rng = np.random.RandomState(seed)
-        Sigma = np.diag(self.eigenvalues) # I don't like this. I want The sigma to be used directly make self.sigma please 
-        X_pop = rng.multivariate_normal(np.zeros(self.d), Sigma, size = n_samples)
+        X_pop = rng.multivariate_normal(np.zeros(self.d), self.Sigma, size=n_samples)
 
 
         logits = X_pop @ self.w_star

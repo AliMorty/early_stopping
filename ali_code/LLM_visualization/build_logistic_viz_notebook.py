@@ -133,7 +133,7 @@ def make_fig(title, ytitle):
                   line=dict(color="green",  dash="dash", width=1.5))
     f.add_scatter(x=[], y=[], name="val argmin", mode="lines",
                   line=dict(color="purple", dash="dash", width=1.5))
-    f.update_layout(title=title, xaxis_title="step t", yaxis_title=ytitle, height=380,
+    f.update_layout(title=title, xaxis_title="opt length (eta * t)", yaxis_title=ytitle, height=380,
                     legend=dict(orientation="h", y=1.02, yanchor="bottom"))
     return f
 
@@ -203,7 +203,7 @@ def update_scales():
 run_btn = widgets.Button(description="Run", button_style="primary", layout=widgets.Layout(width="120px"))
 status  = widgets.Label(value="")
 
-state = {"traj": None, "oracle_thr": None}
+state = {"traj": None, "oracle_thr": None, "eta": None}
 
 def _yrange(curves):
     vals = [v for c in curves for v in c]
@@ -219,29 +219,33 @@ def redraw():
     traj = state["traj"]
     if traj is None:
         return
-    ts = list(range(len(traj["log_loss_train"])))
+    eta = state["eta"]
+    n = len(traj["log_loss_train"])
+    xs = [eta * t for t in range(n)]   # x-axis is opt length eta*t, not raw step t
     thr = state["oracle_thr"]
     tr, va = traj["log_loss_train"], traj["log_loss_valid"]
     oi = next((t for t, l in enumerate(tr) if thr is not None and l <= thr), None)
     vi = 1 + int(np.argmin(va[1:])) if len(va) > 1 else None  # skip t=0 (w=0)
+    ox = None if oi is None else eta * oi   # stop lines on the same eta*t axis
+    vx = None if vi is None else eta * vi
 
     log_curves = [traj["log_loss_train"], traj["log_loss_valid"], traj["log_loss_test"]]
     ly0, ly1 = _yrange(log_curves)
     with fig_log.batch_update():
-        fig_log.data[0].x = ts; fig_log.data[0].y = traj["log_loss_train"]
-        fig_log.data[1].x = ts; fig_log.data[1].y = traj["log_loss_valid"]
-        fig_log.data[2].x = ts; fig_log.data[2].y = traj["log_loss_test"]
-        _set_vline(fig_log.data[3], oi, ly0, ly1)
-        _set_vline(fig_log.data[4], vi, ly0, ly1)
+        fig_log.data[0].x = xs; fig_log.data[0].y = traj["log_loss_train"]
+        fig_log.data[1].x = xs; fig_log.data[1].y = traj["log_loss_valid"]
+        fig_log.data[2].x = xs; fig_log.data[2].y = traj["log_loss_test"]
+        _set_vline(fig_log.data[3], ox, ly0, ly1)
+        _set_vline(fig_log.data[4], vx, ly0, ly1)
 
     zo_curves = [traj["zero_one_train"], traj["zero_one_valid"], traj["zero_one_test"]]
     zy0, zy1 = _yrange(zo_curves)
     with fig_zo.batch_update():
-        fig_zo.data[0].x = ts; fig_zo.data[0].y = traj["zero_one_train"]
-        fig_zo.data[1].x = ts; fig_zo.data[1].y = traj["zero_one_valid"]
-        fig_zo.data[2].x = ts; fig_zo.data[2].y = traj["zero_one_test"]
-        _set_vline(fig_zo.data[3], oi, zy0, zy1)
-        _set_vline(fig_zo.data[4], vi, zy0, zy1)
+        fig_zo.data[0].x = xs; fig_zo.data[0].y = traj["zero_one_train"]
+        fig_zo.data[1].x = xs; fig_zo.data[1].y = traj["zero_one_valid"]
+        fig_zo.data[2].x = xs; fig_zo.data[2].y = traj["zero_one_test"]
+        _set_vline(fig_zo.data[3], ox, zy0, zy1)
+        _set_vline(fig_zo.data[4], vx, zy0, zy1)
 
 def on_run(b):
     run_btn.disabled = True
@@ -266,6 +270,7 @@ def on_run(b):
         traj, key, note, oracle_thr = compute_and_cache(config)
         state["traj"] = traj
         state["oracle_thr"] = oracle_thr
+        state["eta"] = config["eta"]
         redraw()
         status.value = f"{note}  (key={key})"
         refresh_runs(select_key=key)  # keep dropdown current, select this run

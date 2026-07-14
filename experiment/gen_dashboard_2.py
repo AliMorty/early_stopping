@@ -38,7 +38,7 @@ for f in pkl_files:
         _cfg = data["config"]
         _model = OverparameterizedLogisticRegression(
             n=_cfg["n"], d=_cfg["d"], k=_cfg["k"],
-            eigenvalues=np.array(_cfg["eigenvalues"]),
+            Sigma=np.array(_cfg["Sigma"]),
             w_star=np.array(_cfg["w_star"]),
             eta=_cfg["eta"], seed=_cfg["seed"],
         )

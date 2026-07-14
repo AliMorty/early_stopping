@@ -1,0 +1,1 @@
+here I document my questions regarding running this experiment on larger data and for more iterations and for more examples, and more frequently. I want to understand the best way to run those experiment at large scale. 
