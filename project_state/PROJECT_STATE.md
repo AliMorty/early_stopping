@@ -145,6 +145,24 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
   green-square early-stop + purple-star test-argmin markers. Compact `region_cache/` (see design
   decisions). **Has a known bug — see Known Bugs (renders multiple copies of the figure).**
 
+### In Progress / Next Steps (updated 2026-07-23)
+- [x] **2D projection fixed to an orthonormal frame.** Ali added `proj_on_2d_subspace` (Gram–Schmidt,
+  `axis=-1`, shape-agnostic) to `logistic_regression_hold_out.ipynb` and vectorized v1/v2 to use it.
+  Found + fixed a basis-inconsistency bug where reference points (`w*`, `w̃`) were projected in the raw
+  oblique frame while trajectories used the orthonormal one — `region_visualization.ipynb` now routes
+  `w*`/`w̃` through `proj_on_2d_subspace`, so `w*` lands exactly on the x-axis. Regenerated
+  `logistic_regression.py`. Added an auto-rebuild cell (runs `build_logistic_module.py`) at the top of
+  the viz. Purged the 4 wrongly-projected `region_cache/*.pkl` (reset `index.json`). See
+  `session_summaries/2026-07-23.md`. **TODO:** re-run v2 setups to repopulate the cache correctly.
+- [ ] **(OPEN BUG) `region_visualization.ipynb` renders the figure multiple times** (help text also
+  printed 3×). Two fix attempts on 2026-07-23 did NOT work: (1) pin `plotly.io` renderer + `display()`
+  instead of `fig.show()`; (2) drop the `ipywidgets.Output` and use a persistent `go.FigureWidget`
+  updated in place. Callback logic verified (via headless sim) to fire exactly once, so the cause is
+  in the frontend/render layer, not the wiring. Notebook currently holds the `FigureWidget` version.
+  See `session_summaries/2026-07-23.md`.
+- [ ] **Decide whether to retire v1** once the viz no longer needs to dispatch on `version` (v2 is a
+  functional superset). Not deleted yet (protected code; viz can still load v1).
+
 ### In Progress / Next Steps (updated 2026-07-13)
 - [x] **Trajectory-plane helper module** (`ali_code/LLM_visualization/w_plane_trajectories.py`) —
   standalone `find_w_tilde` (GD, non-separable) / `find_w_tilde_svm` (exact max-margin via **cvxpy**

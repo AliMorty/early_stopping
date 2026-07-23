@@ -168,6 +168,17 @@ class LogisticRegressionClass:
         }
 
 
+    def proj_on_2d_subspace(self, d_dimensional_vectors, v1, v2) :
+        u1 = v1/np.linalg.norm(v1)
+        v2_prep = v2 - np.dot(v2, u1) * u1
+        u2 = v2_prep/np.linalg.norm(v2_prep)
+
+        W = np.array(d_dimensional_vectors) 
+        proj_1 = W @ u1
+        proj_2 = W @ u2
+        return np.stack([proj_1, proj_2], axis=-1)
+
+
     def plot_loss_over_time(self, logistic_loss_training_trajectory=None, zero_one_loss_training_trajectory=None,
          logistic_loss_validation_trajectory=None, zero_one_loss_validation_trajectory=None,
          logistic_loss_test_trajectory=None, zero_one_loss_test_trajectory=None, eta=None,
@@ -261,27 +272,9 @@ class LogisticRegressionClass:
 
 
 
-    def region_experiment_v1(self,number_of_trajectories):
 
-        # trajectories = []
-
-        # generate data for k = number of trajectories
-        # for i in range (0, k)
-        # run GD for each one
-        # # 1) Store the trajectory
-        # # 2) find w_tilde
-        # trajectories[i] = trajectory
-        # w_tilde[i] = w_tilde
-        # then plot all trajectories in space of 
-        # w_1 = w^*
-        # w_2 = sum of all w_tilde[i]
-        # see how it looks
-        # I'm testinggg11
-        # 1
-        pass
-
-    def plot_trajectory_over(self, w_1, w_2, trajectory_dict_perhaps):
-        pass
+    # def plot_trajectory_over(self, w_1, w_2, trajectory_dict_perhaps):
+    #     pass
 
     def LLM_generated_region_experiment_v1(self, number_of_trajectories, w_star,
                                             d=None, n=None, t_steps=1000, eta=None,
@@ -337,11 +330,24 @@ class LogisticRegressionClass:
 
         # project each trajectory onto (w_1_direction, w_2_direction)
         projected_trajectories = []
-        for trajectory in trajectories:
-            W = np.array(trajectory)  # shape (t_steps+1, d)
-            proj_1 = W @ w_1_direction
-            proj_2 = W @ w_2_direction
-            projected_trajectories.append(np.stack([proj_1, proj_2], axis=1))
+
+
+        # Since the trajectories have the same length, we do the projections in vectorized way 
+        # instead of the one below 
+        # --------------------------------------------
+        # for trajectory in trajectories:
+        # #     W = np.array(trajectory)  # shape (t_steps+1, d)
+        # #     proj_1 = W @ w_1_direction
+        # #     proj_2 = W @ w_2_direction
+        #     projected_traj = self.proj_on_2d_subspace(trajectory, w_1_direction, w_2_direction)
+        #     projected_trajectories.append(projected_traj)
+        # --------------------------------------------
+        # -----
+        # Vectorized Version below
+        # -----
+        # --------------------------------------------
+        projected_trajectories = self.proj_on_2d_subspace(trajectories, w_1_direction, w_2_direction)
+        # --------------------------------------------
 
         if plot:
             plt.figure(figsize=(7, 7))
@@ -368,6 +374,8 @@ class LogisticRegressionClass:
 
 
         # ------------------------------------------
+
+
 
     def LLM_generated_region_experiment_v2(self, number_of_trajectories, w_star,
                                             d=None, n=None, t_steps=1000, eta=None,
@@ -454,12 +462,22 @@ class LogisticRegressionClass:
         w_2_direction = w_tilde_sum / w_tilde_sum_norm if w_tilde_sum_norm > 0 else w_tilde_sum
 
         # project each trajectory onto (w_1_direction, w_2_direction)
-        projected_trajectories = []
-        for trajectory in trajectories:
-            W = np.array(trajectory)  # shape (t_steps+1, d)
-            proj_1 = W @ w_1_direction
-            proj_2 = W @ w_2_direction
-            projected_trajectories.append(np.stack([proj_1, proj_2], axis=1))
+        # Since the trajectories have the same length, we do the projections in vectorized way 
+        # instead of the one below 
+        # --------------------------------------------
+        # for trajectory in trajectories:
+        # #     W = np.array(trajectory)  # shape (t_steps+1, d)
+        # #     proj_1 = W @ w_1_direction
+        # #     proj_2 = W @ w_2_direction
+        #     projected_traj = self.proj_on_2d_subspace(trajectory, w_1_direction, w_2_direction)
+        #     projected_trajectories.append(projected_traj)
+        # --------------------------------------------
+        # -----
+        # Vectorized Version below
+        # -----
+        # --------------------------------------------
+        projected_trajectories = self.proj_on_2d_subspace(trajectories, w_1_direction, w_2_direction)
+        # --------------------------------------------
 
         if plot:
             plt.figure(figsize=(7, 7))
