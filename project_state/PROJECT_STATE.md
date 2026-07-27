@@ -145,6 +145,22 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
   green-square early-stop + purple-star test-argmin markers. Compact `region_cache/` (see design
   decisions). **Has a known bug — see Known Bugs (renders multiple copies of the figure).**
 
+### v3 — browsable projection axes (added 2026-07-26)
+- [x] **`LLM_generated_region_experiment_v3`** (Ali's notebook; module regenerated) — stores,
+  per iterate, raw dot products `P[i,t,a] = ⟨w_{i,t}, v_a⟩` against a set of unit candidate axes
+  (`w*`, each `w̃_i`, `sum_w̃`, `n_random_axes` isotropic random axes) plus the axis Gram matrix
+  `G`. Returns `P`, `G`, `axis_labels`, raw `w_star`/`w_tildes` (true magnitude), stop indices.
+  No full d-dim trajectories stored (~200× smaller). Dropped the old `w_1`/`w_2` plane params.
+- [x] **v3 visualizer** in `region_visualization.ipynb` — new cache schema (`P`/`G`/`axis_labels`/
+  `ref_rows`), `reconstruct_2d` (view-time Gram–Schmidt) so any axis pair renders instantly with
+  no GD rerun. Control panel: **v1 (x-axis)/v2 (y-axis)** dropdowns, `# rand proj axes` field.
+  Plot: legend selection preserved across axis/`n_ticks` changes, v1/v2 basis arrows (label at
+  head), Unicode `v₁`/`v₂⊥` axis titles, early-stop squares colored per trajectory. Verified
+  end-to-end (`w*` lands at `(‖w*‖,0)` on x-axis=`w*`). See `session_summaries/2026-07-26.md`.
+- [ ] **Resume GD from the stored last iterate** when extending `t_steps` (v3 must also return a
+  per-trajectory `w_last`; viz caches + continues instead of recomputing from scratch).
+- [ ] Optionally let v3 accept a user-supplied set of custom projection axes.
+
 ### In Progress / Next Steps (updated 2026-07-23)
 - [x] **2D projection fixed to an orthonormal frame.** Ali added `proj_on_2d_subspace` (Gram–Schmidt,
   `axis=-1`, shape-agnostic) to `logistic_regression_hold_out.ipynb` and vectorized v1/v2 to use it.
@@ -203,11 +219,9 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 
 ## Known Bugs
 
-- **`region_visualization.ipynb` control panel renders MULTIPLE copies of the figure (~3) instead of
-  one** (2026-07-14). One double-draw was fixed (`_on_run` plotted via both the dropdown observer and a
-  direct call) but Ali reports 3 still appear. Deferred to the next agent. Investigate `cell_panel`:
-  overlapping observer fires (`_on_select` on `run_dd`, `_on_ticks` on `w_ticks`) + `_refresh_dd()`'s
-  options-reassignment + the explicit `_plot_key` path; and whether `out.clear_output(wait=True)` is
-  failing to collapse successive plotly `.show()` outputs. Do NOT assume it is fixed.
+- **(Reported fixed 2026-07-26)** `region_visualization.ipynb` multi-figure render. The v3 rewrite
+  uses a persistent `go.FigureWidget` updated in place; headless execution confirms the control-panel
+  cell emits exactly ONE widget view. Ali reports the live UI no longer duplicates. Watch for it if
+  the FigureWidget/ipywidgets sync misbehaves in VS Code.
 - `dashboard_1` stopping line may be misaligned on log x-axis (not yet investigated)
 - `offline_dashboard_1` had iPad rendering issue (no longer prioritized)
