@@ -673,5 +673,159 @@ class LogisticRegressionClass:
             "early_stop_t": early_stop_t,
             "test_loss_argmin_t": test_loss_argmin_t,
         }
+    def LLM_generated_trajectory_comparison_over_time(self, w_star,
+                                    d=None, n=None, t_steps=1000, eta=None,
+                                    Sigma=None, lambda_diag=None, use_lambda_diag=True,
+                                    k_list=(5, 10, 15, 50),
+                                    test_sample_size=int(3e3),
+                                    measure_population_loss_for_iterates=True,
+                                    plot=True):
+    # A NEW plot type (NOT a spatial projection like v1/v2/v3): the x-axis is TIME
+    # (the GD step t). We run exactly TWO GD trajectories from two INDEPENDENT data
+    # draws of the same distribution (same w*), then compare them over time:
+    #
+    #   1. angle(w1_t, w2_t)      -- angle (radians) between the two full weight
+    #                               vectors at each step. Single (T,) series.
+    #   2. ||w1_t - w2_t||        -- L2 norm of their difference, restricted to a
+    #                               COORDINATE SUBSET. For every k in k_list we store
+    #                               both the FIRST-k coords and the LAST (d-k) coords,
+    #                               and (once) the norm over ALL d coords.
+    #
+    # These metrics need the actual weight vectors over time, so unlike v3 this does
+    # NOT use the P/G projection machinery -- it works on the full w_t directly.
+    #
+    # Shapes: run_GD_for_t_steps stores w_0 (=zeros) then t_steps updates, so each
+    # trajectory has T = t_steps + 1 iterates. The loss trajectories have length
+    # t_steps, and loss[t] corresponds to w_trajectory[t]; the stop indices below are
+    # therefore valid indices into the (T,) metric arrays. angle at t=0 is undefined
+    # (both trajectories are the zero vector) and is set to NaN.
+        if d is None:
+            d = self.d
+        if n is None:
+            n = self.n
+        if eta is None:
+            eta = self.eta
+
+        # single shared test set approximating the population (same distribution for
+        # both trajectories, so one test set suffices).
+        X_test = y_test = None
+        if measure_population_loss_for_iterates:
+            X_test, y_test = self.generate_data(
+                d, int(test_sample_size), w_star, Sigma=Sigma,
+                lambda_diag=lambda_diag, use_lambda_diag=use_lambda_diag
+            )
+
+        trajectories = []
+        early_stop_t = []        # per trajectory: t of training-based oracular early stop
+        test_loss_argmin_t = []  # per trajectory: t of argmin population (test) loss
+
+        for i in range(2):
+            X_data, y_data = self.generate_data(
+                d, n, w_star, Sigma=Sigma, lambda_diag=lambda_diag,
+                use_lambda_diag=use_lambda_diag
+            )
+
+            result = self.run_GD_for_t_steps(
+                X_data, y_data, eta=eta, t_steps=t_steps,
+                X_test=X_test, y_test=y_test,
+                store_w_trajectory=True,
+                store_log_loss_traj_for_training=True,
+                store_log_loss_traj_for_test=measure_population_loss_for_iterates,
+            )
+            trajectories.append(np.asarray(result["w_trajectory"], dtype=float))  # (T, d)
+
+            train_log_loss = result["log_loss_train"]
+            test_log_loss = result["log_loss_test"]
+
+            # early-stopping point: first t with L_train(w_t) <= L_train(w*_{0:k}).
+            L_hat_w_star = self.oracular_ell_hat_w_star_zero_to_k(X_data, y_data, w_star)
+            es_t = None
+            for t, loss in enumerate(train_log_loss):
+                if loss <= L_hat_w_star:
+                    es_t = t
+                    break
+            early_stop_t.append(es_t)
+
+            # argmin of the population (test) logistic loss
+            am_t = None
+            if measure_population_loss_for_iterates and len(test_log_loss) > 0:
+                am_t = int(np.argmin(test_log_loss))
+            test_loss_argmin_t.append(am_t)
+
+        W1, W2 = trajectories[0], trajectories[1]   # each (T, d)
+        T = W1.shape[0]
+
+        # ---- angle(w1_t, w2_t) over time (full vectors, radians) ----
+        dot = np.sum(W1 * W2, axis=1)               # (T,)
+        norm1 = np.linalg.norm(W1, axis=1)          # (T,)
+        norm2 = np.linalg.norm(W2, axis=1)          # (T,)
+        denom = norm1 * norm2
+        with np.errstate(divide="ignore", invalid="ignore"):
+            cos = np.where(denom > 0, dot / denom, np.nan)
+        cos = np.clip(cos, -1.0, 1.0)
+        angle = np.arccos(cos)                       # (T,), NaN where a vector is 0
+
+        # ---- ||w1_t - w2_t|| over time, on coordinate subsets ----
+        diff = W1 - W2                               # (T, d)
+        diff_all = np.linalg.norm(diff, axis=1)     # (T,), over ALL d coords
+
+        # per-k: first-k coords and last-(d-k) coords. k is clamped to [0, d].
+        diff_first_k = {}   # k -> (T,) norm over coords [0:k]
+        diff_last_k = {}    # k -> (T,) norm over coords [k:d]  (i.e. last d-k coords)
+        k_list = [int(k) for k in k_list]
+        for k in k_list:
+            kk = max(0, min(k, d))
+            diff_first_k[k] = np.linalg.norm(diff[:, :kk], axis=1)
+            diff_last_k[k] = np.linalg.norm(diff[:, kk:], axis=1)
+
+        if plot:
+            n_rows = 2
+            fig, axes = plt.subplots(n_rows, 1, figsize=(9, 8), sharex=True)
+            ts = np.arange(T)
+
+            # (1) angle over time
+            ax0 = axes[0]
+            ax0.plot(ts, angle, color="black", lw=1.5)
+            ax0.set_ylabel("angle(w1_t, w2_t) [rad]")
+            ax0.set_title("Angle between the two GD trajectories over time")
+
+            # (2) norm-diff over time, all / per-k first / per-k last
+            ax1 = axes[1]
+            ax1.plot(ts, diff_all, color="black", lw=2, label="all d coords")
+            for k in k_list:
+                ax1.plot(ts, diff_first_k[k], lw=1, label=f"first {k}")
+                ax1.plot(ts, diff_last_k[k], lw=1, ls="--", label=f"last d-{k}")
+            ax1.set_ylabel("||w1_t - w2_t||")
+            ax1.set_xlabel("GD step t")
+            ax1.set_title("Norm of trajectory difference over time (coordinate subsets)")
+            ax1.legend(fontsize=8, ncol=2)
+
+            # early-stop (green dashed) and test-loss argmin (purple dotted) verticals
+            for idx in range(2):
+                es = early_stop_t[idx]
+                am = test_loss_argmin_t[idx]
+                if es is not None:
+                    for ax in axes:
+                        ax.axvline(es, color="green", ls="--", alpha=0.6,
+                                    label=("early stop" if (idx == 0 and ax is ax0) else None))
+                if am is not None:
+                    for ax in axes:
+                        ax.axvline(am, color="purple", ls=":", alpha=0.6,
+                                    label=("test-loss argmin" if (idx == 0 and ax is ax0) else None))
+            ax0.legend(fontsize=8)
+            plt.tight_layout()
+            plt.show()
+
+        return {
+            "angle": angle,                       # (T,), radians; NaN at t=0
+            "diff_all": diff_all,                 # (T,), ||w1-w2|| over all d coords
+            "diff_first_k": diff_first_k,         # dict: k -> (T,) over coords [0:k]
+            "diff_last_k": diff_last_k,           # dict: k -> (T,) over coords [k:d]
+            "k_list": k_list,
+            "d": d,
+            "early_stop_t": early_stop_t,         # [t1, t2] indices (or None)
+            "test_loss_argmin_t": test_loss_argmin_t,  # [t1, t2] indices (or None)
+        }
+
 
 
