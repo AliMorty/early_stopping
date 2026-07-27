@@ -160,6 +160,11 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - [ ] **Resume GD from the stored last iterate** when extending `t_steps` (v3 must also return a
   per-trajectory `w_last`; viz caches + continues instead of recomputing from scratch).
 - [ ] Optionally let v3 accept a user-supplied set of custom projection axes.
+- [ ] **NEW plot type — over-time trajectory comparison** (`LLM_generated_trajectory_comparison_over_time`,
+  proposed name; deliberately NOT a "v4" projection). x-axis = time; for a selectable pair of
+  trajectories plot `angle(w¹_t, w²_t)` and `‖w¹_t − w²_t‖` over a selectable coordinate subset
+  (first `k` / last `d−k` / all). Uses full weight vectors, not `P`/`G`. Storage schema for
+  arbitrary view-time `k` is the open question — see `session_summaries/2026-07-26.md`.
 
 ### In Progress / Next Steps (updated 2026-07-23)
 - [x] **2D projection fixed to an orthonormal frame.** Ali added `proj_on_2d_subspace` (Gram–Schmidt,
