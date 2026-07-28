@@ -166,6 +166,16 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
   (first `k` / last `d−k` / all). Uses full weight vectors, not `P`/`G`. Storage schema for
   arbitrary view-time `k` is the open question — see `session_summaries/2026-07-26.md`.
 
+### Added 2026-07-28
+- [x] **`wtilde_average_convergence.ipynb`** — "does the average of many `w̃` draws
+  converge to `w*`?" Each `w̃=find_w_tilde` is one draw (fresh `(X,y)`); plots running
+  mean's `‖w̄_N−w*‖`, `angle(w̄_N,w*)`, and population `L(w̄_N)` vs `L(w*)` (fresh
+  held-out sample) against #draws. `normalize_w_tilde` toggle for direction-only. Cache
+  `wtilde_avg_cache/`. See `session_summaries/2026-07-28.md`.
+- [ ] **(OPEN, no code changed)** Region v3 plot: consider removing the red "end" star
+  (marks only the `t_steps` cutoff, not a meaningful point; clutters the end-blob near
+  the informative test-argmin/early-stop markers). Pending Ali's decision.
+
 ### In Progress / Next Steps (updated 2026-07-23)
 - [x] **2D projection fixed to an orthonormal frame.** Ali added `proj_on_2d_subspace` (Gram–Schmidt,
   `axis=-1`, shape-agnostic) to `logistic_regression_hold_out.ipynb` and vectorized v1/v2 to use it.
@@ -219,6 +229,9 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
 - Does the theoretical stopping time (Theorem 3.1) coincide with the argmins of angle(w_t, w*), norm_diff, angle(w_t, w̃)?
 - How robust is this across different seeds, k values, covariance structures?
 - Does E[w̃] converge to w*? (preliminary positive signal at M=50, needs M=200+)
+  — now has a dedicated interactive tool: `ali_code/LLM_visualization/wtilde_average_convergence.ipynb`
+  (running mean of raw or unit-normalized `w̃` vs #draws; norm-diff, angle, and
+  population `L(w̄)` vs `L(w*)`). Built 2026-07-28.
 
 ---
 
