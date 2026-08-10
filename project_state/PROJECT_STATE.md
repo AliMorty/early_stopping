@@ -176,6 +176,25 @@ GitHub Pages: `https://alimorty.github.io/early_stopping/`
   (marks only the `t_steps` cutoff, not a meaningful point; clutters the end-blob near
   the informative test-argmin/early-stop markers). Pending Ali's decision.
 
+### Added 2026-08-09 — vector PDF/SVG export from the interactive plots
+- [x] **💾 Save vector button** in `region_visualization.ipynb` (assistant-owned). New helpers cell
+  (`_to_vector_figure`, `save_vector_figure`, `make_save_row`) + a save row **inside** the region
+  control panel (saves `fig_widget`'s current view — legend selection + zoom) and under **each** of
+  the two over-time comparison figures. Exports true vector PDF/SVG (`.png` = raster fallback).
+  Format inferred from the filename extension.
+- [x] **Scattergl→Scatter on export.** The region plot uses `go.Scattergl` (WebGL) which exports as a
+  RASTER bitmap; `_to_vector_figure` rebuilds those traces as `go.Scatter` (SVG) so the file is fully
+  vector. Verified: exported region PDF has 0 embedded raster images.
+- [x] **Removed the auto-generated `region run [hash] (x vs y)` plot title** (and the fallback default
+  title) — gone from the interactive plot and exports.
+- **Dependency:** requires `kaleido`. Pinned **`kaleido==0.2.1`** (self-contained renderer; no Chrome).
+  Plotly 6.x's default kaleido v1 needs a system Chrome — avoid it here. (Harmless deprecation warning.)
+- [ ] Same 💾 Save vector button for `logistic_visualization.ipynb` (Ali will request next).
+- ⚠️ **STALE GENERATOR HAZARD:** `build_region_visualization_notebook.py` only knows v1/v2 and is NOT
+  the source of truth — the notebook is edited **directly**. Running the generator **overwrites the v3
+  notebook** (happened 2026-08-09; recovered via `git checkout`). Do not run it unless first synced.
+  See `session_summaries/2026-08-09.md` and memory `region-notebook-edited-directly.md`.
+
 ### In Progress / Next Steps (updated 2026-07-23)
 - [x] **2D projection fixed to an orthonormal frame.** Ali added `proj_on_2d_subspace` (Gram–Schmidt,
   `axis=-1`, shape-agnostic) to `logistic_regression_hold_out.ipynb` and vectorized v1/v2 to use it.
